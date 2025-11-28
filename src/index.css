@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* Evita scrollbars dobles en la app de escritorio */
+  width: 100%;
+}
+
+/* Allow scrolling on mobile */
+@media (max-width: 640px) {
+  body {
+    overflow: auto;
+  }
+  
+  /* Ensure full width on mobile */
+  #root {
+    width: 100%;
+    max-width: 100%;
+  }
+}
