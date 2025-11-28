@@ -1,4 +1,4 @@
-# 📊 ProTrader Journal
+# 📊 DollarOPS Trading Journal
 
 Una aplicación web moderna y profesional para llevar un registro detallado de tus operaciones de trading. Diseñada con una interfaz intuitiva y múltiples temas personalizables, ProTrader Journal te ayuda a analizar tu rendimiento y mejorar tus estrategias de trading.
 
