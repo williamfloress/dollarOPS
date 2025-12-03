@@ -32,7 +32,9 @@ import {
   Play,
   Pause,
   Clock,
-  Zap
+  Zap,
+  Brain,
+  CalendarX
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -759,6 +761,9 @@ export default function TradingJournalApp() {
   const [isEditEntryModalOpen, setIsEditEntryModalOpen] = useState(false);
   const [viewingEntry, setViewingEntry] = useState(null);
   const [editingEntry, setEditingEntry] = useState(null);
+  const [isAddThoughtModalOpen, setIsAddThoughtModalOpen] = useState(false);
+  const [isEditThoughtModalOpen, setIsEditThoughtModalOpen] = useState(false);
+  const [editingThought, setEditingThought] = useState(null);
   const [newPairInput, setNewPairInput] = useState('');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetStep, setResetStep] = useState(1); // 1: initial warning, 2: export offer, 3: final confirmation
@@ -782,6 +787,7 @@ export default function TradingJournalApp() {
 
   const theme = THEMES[currentTheme].colors; 
   const [formState, setFormState] = useState({ pair: '', type: 'BUY', rr: '', pnl: '', notes: '', screenshotUrl: '' });
+  const [thoughtFormState, setThoughtFormState] = useState({ message: '', tradingViewUrl: '' });
   const RR_OPTIONS = ['SL', 'BE', '1:1', '1:2', '1:3', '1:4', '1:5'];
 
   // Sync theme type filter when current theme changes
@@ -800,8 +806,18 @@ export default function TradingJournalApp() {
     const stats = { daily: createStat(), weekly: createStat(), monthly: createStat(), annual: createStat(), global: createStat() };
 
     entries.forEach(entry => {
+      // Skip non-trading entries (thoughts, dayoff) - these are visual only
+      if (entry.entryType === 'thought' || entry.entryType === 'dayoff') return;
+      
+      // Only process entries that have a valid pnl (trading entries)
+      if (entry.pnl === undefined || entry.pnl === null) return;
+      
       const entryDate = new Date(entry.date);
       const pnl = parseFloat(entry.pnl);
+      
+      // Safety check: skip if pnl is not a valid number
+      if (isNaN(pnl)) return;
+      
       const isWin = pnl > 0;
       const isLoss = pnl < 0;
       const isBreakEven = pnl === 0;
@@ -862,10 +878,14 @@ export default function TradingJournalApp() {
   const handleRemovePair = (pair) => setAvailablePairs(availablePairs.filter(p => p !== pair));
   const handleDeleteEntry = (id) => setEntries(entries.filter(e => e.id !== id));
   const handleViewEntry = (entry) => {
+    // Safety check: only view trading entries (not thoughts or dayoff)
+    if (entry.entryType === 'thought' || entry.entryType === 'dayoff') return;
     setViewingEntry(entry);
     setIsViewEntryModalOpen(true);
   };
   const handleEditEntry = (entry) => {
+    // Safety check: only edit trading entries (not thoughts or dayoff)
+    if (entry.entryType === 'thought' || entry.entryType === 'dayoff') return;
     setEditingEntry(entry);
     setFormState({
       pair: entry.pair,
@@ -894,6 +914,74 @@ export default function TradingJournalApp() {
     setFormState({ pair: '', type: 'BUY', rr: '', pnl: '', notes: '', screenshotUrl: '' });
     setEditingEntry(null);
     setIsEditEntryModalOpen(false);
+  };
+  
+  // Thought handlers
+  const handleAddThought = (e) => {
+    e.preventDefault();
+    if (!selectedDate) {
+      alert('Por favor selecciona un día primero');
+      return;
+    }
+    if (!thoughtFormState.message && !thoughtFormState.tradingViewUrl) return;
+    const newThought = { 
+      id: Date.now(), 
+      date: selectedDate.toISOString(), 
+      entryType: 'thought',
+      message: thoughtFormState.message,
+      tradingViewUrl: thoughtFormState.tradingViewUrl
+    };
+    setEntries([...entries, newThought]);
+    setThoughtFormState({ message: '', tradingViewUrl: '' });
+    setIsAddThoughtModalOpen(false);
+  };
+  
+  const handleEditThought = (thought) => {
+    setEditingThought(thought);
+    setThoughtFormState({
+      message: thought.message || '',
+      tradingViewUrl: thought.tradingViewUrl || ''
+    });
+    setIsEditThoughtModalOpen(true);
+  };
+  
+  const handleUpdateThought = (e) => {
+    e.preventDefault();
+    if (!editingThought) return;
+    if (!thoughtFormState.message && !thoughtFormState.tradingViewUrl) return;
+    const updatedThought = {
+      ...editingThought,
+      message: thoughtFormState.message,
+      tradingViewUrl: thoughtFormState.tradingViewUrl
+    };
+    setEntries(entries.map(e => e.id === editingThought.id ? updatedThought : e));
+    setThoughtFormState({ message: '', tradingViewUrl: '' });
+    setEditingThought(null);
+    setIsEditThoughtModalOpen(false);
+  };
+  
+  const handleDeleteThought = (id) => setEntries(entries.filter(e => e.id !== id));
+  
+  // Day Off handler
+  const handleToggleDayOff = () => {
+    if (!selectedDate) return;
+    
+    const dayEntries = entries.filter(e => isSameDay(new Date(e.date), selectedDate));
+    const existingDayOff = dayEntries.find(e => e.entryType === 'dayoff');
+    
+    if (existingDayOff) {
+      // Remove day off
+      setEntries(entries.filter(e => e.id !== existingDayOff.id));
+    } else {
+      // Add day off
+      const newDayOff = {
+        id: Date.now(),
+        date: selectedDate.toISOString(),
+        entryType: 'dayoff',
+        message: 'DAY OFF'
+      };
+      setEntries([...entries, newDayOff]);
+    }
   };
   const changeMonth = (offset) => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + offset)));
   
@@ -1184,9 +1272,11 @@ export default function TradingJournalApp() {
 
   // Exportar CSV
   const handleExportData = () => {
-    if (entries.length === 0) { alert("No hay datos para exportar"); return; }
+    // Filter out thoughts and dayoff - only export trading entries
+    const tradingEntries = entries.filter(e => !e.entryType || (e.entryType !== 'thought' && e.entryType !== 'dayoff'));
+    if (tradingEntries.length === 0) { alert("No hay datos para exportar"); return; }
     const headers = ["ID,Fecha,Hora,Par,Tipo,R:R,Resultado ($),Estado,Notas,URL Captura"];
-    const rows = entries.map(e => {
+    const rows = tradingEntries.map(e => {
       const dateObj = new Date(e.date);
       const status = e.pnl > 0 ? "WIN" : e.pnl < 0 ? "LOSS" : "BREAK-EVEN";
       const safeNotes = e.notes ? `"${e.notes.replace(/"/g, '""')}"` : '""';
@@ -1286,6 +1376,7 @@ export default function TradingJournalApp() {
     setCurrentTheme('slate_blue');
     setSelectedDate(null);
     setFormState({ pair: '', type: 'BUY', rr: '', pnl: '', notes: '', screenshotUrl: '' });
+    setThoughtFormState({ message: '', tradingViewUrl: '' });
     setIsFirstTime(true);
     
     // Close modals
@@ -1305,8 +1396,12 @@ export default function TradingJournalApp() {
     for (let d = 1; d <= daysInMonth; d++) {
       const dateToCheck = new Date(currentDate.getFullYear(), currentDate.getMonth(), d);
       const dayEntries = entries.filter(e => isSameDay(new Date(e.date), dateToCheck));
-      const dayPnL = dayEntries.reduce((acc, curr) => acc + parseFloat(curr.pnl), 0);
-      const hasTrades = dayEntries.length > 0;
+      const dayTrades = dayEntries.filter(e => e.entryType !== 'thought' && e.entryType !== 'dayoff');
+      const dayThoughts = dayEntries.filter(e => e.entryType === 'thought');
+      const isDayOff = dayEntries.some(e => e.entryType === 'dayoff');
+      const dayPnL = dayTrades.reduce((acc, curr) => acc + parseFloat(curr.pnl || 0), 0);
+      const hasTrades = dayTrades.length > 0;
+      const hasThoughts = dayThoughts.length > 0;
       const isProfit = dayPnL > 0;
       const isBreakEven = dayPnL === 0;
       const isLoss = dayPnL < 0;
@@ -1316,11 +1411,22 @@ export default function TradingJournalApp() {
         if (isProfit) bgClass = `bg-gradient-to-br from-emerald-900/40 to-${theme.bgCard.replace('bg-', '')}`;
         else if (isBreakEven) bgClass = `bg-gradient-to-br from-yellow-900/40 to-${theme.bgCard.replace('bg-', '')}`;
         else bgClass = `bg-gradient-to-br from-rose-900/40 to-${theme.bgCard.replace('bg-', '')}`;
+      } else if (isDayOff && !hasTrades) {
+        bgClass = `bg-gradient-to-br from-gray-700/50 to-${theme.bgCard.replace('bg-', '')}`;
+      } else if (hasThoughts && !hasTrades) {
+        bgClass = `bg-gradient-to-br from-purple-900/30 to-${theme.bgCard.replace('bg-', '')}`;
       }
       days.push(
         <div key={d} onClick={() => handleDayClick(d)} className={`h-full min-h-[100px] p-3 cursor-pointer transition-all relative group flex flex-col justify-between border ${theme.border} ${bgClass} ${isSelected ? `ring-2 ${theme.accentRing} z-10 shadow-xl` : ''}`}>
-          <div className="flex justify-between items-start gap-1"><span className={`text-lg font-bold ${isSelected ? theme.textMain : `${theme.textMuted} group-hover:${theme.textMain}`}`}>{d}</span>{hasTrades && (<div className={`text-xs font-bold px-1.5 py-0.5 rounded shrink-0 ${isProfit ? 'bg-emerald-500/20 text-emerald-300' : isBreakEven ? 'bg-yellow-500/20 text-yellow-300' : 'bg-rose-500/20 text-rose-300'}`}>{dayEntries.length} Op</div>)}</div>
-          {hasTrades ? (<div className={`text-lg font-mono font-bold tracking-tight truncate ${theme.textSec}`}>{dayPnL > 0 ? '+' : ''}{dayPnL}$</div>) : (<div className="opacity-0 group-hover:opacity-100 transition-opacity absolute inset-0 flex items-center justify-center bg-black/20"><Plus className={theme.textSec} size={16} /></div>)}
+          <div className="flex justify-between items-start gap-1">
+            <span className={`text-lg font-bold ${isSelected ? theme.textMain : `${theme.textMuted} group-hover:${theme.textMain}`}`}>{d}</span>
+            <div className="flex items-center gap-1">
+              {hasTrades && (<div className={`text-xs font-bold px-1.5 py-0.5 rounded shrink-0 ${isProfit ? 'bg-emerald-500/20 text-emerald-300' : isBreakEven ? 'bg-yellow-500/20 text-yellow-300' : 'bg-rose-500/20 text-rose-300'}`}>{dayTrades.length} Op</div>)}
+              {isDayOff && (<div className={`text-xs font-bold px-1.5 py-0.5 rounded shrink-0 bg-gray-500/20 text-gray-300 flex items-center gap-1`} title="Day Off"><CalendarX size={10} /> OFF</div>)}
+              {hasThoughts && !isDayOff && (<div className={`text-xs font-bold px-1.5 py-0.5 rounded shrink-0 bg-purple-500/20 text-purple-300 flex items-center gap-1`} title={`${dayThoughts.length} ${dayThoughts.length === 1 ? 'pensamiento' : 'pensamientos'}`}><Brain size={10} /> {dayThoughts.length}</div>)}
+            </div>
+          </div>
+          {hasTrades ? (<div className={`text-lg font-mono font-bold tracking-tight truncate ${theme.textSec}`}>{dayPnL > 0 ? '+' : ''}{dayPnL}$</div>) : isDayOff ? (<div className={`text-xs ${theme.textMuted} font-bold uppercase flex items-center gap-1`}><CalendarX size={14} /> Day Off</div>) : hasThoughts ? (<div className={`text-xs ${theme.textMuted} flex items-center gap-1`}><Brain size={14} /> Pensamiento</div>) : (<div className="opacity-0 group-hover:opacity-100 transition-opacity absolute inset-0 flex items-center justify-center bg-black/20"><Plus className={theme.textSec} size={16} /></div>)}
         </div>
       );
     }
@@ -1343,8 +1449,12 @@ export default function TradingJournalApp() {
     for (let d = 1; d <= daysInMonth; d++) {
       const dateToCheck = new Date(currentDate.getFullYear(), currentDate.getMonth(), d);
       const dayEntries = entries.filter(e => isSameDay(new Date(e.date), dateToCheck));
-      const dayPnL = dayEntries.reduce((acc, curr) => acc + parseFloat(curr.pnl), 0);
-      const hasTrades = dayEntries.length > 0;
+      const dayTrades = dayEntries.filter(e => e.entryType !== 'thought' && e.entryType !== 'dayoff');
+      const dayThoughts = dayEntries.filter(e => e.entryType === 'thought');
+      const isDayOff = dayEntries.some(e => e.entryType === 'dayoff');
+      const dayPnL = dayTrades.reduce((acc, curr) => acc + parseFloat(curr.pnl || 0), 0);
+      const hasTrades = dayTrades.length > 0;
+      const hasThoughts = dayThoughts.length > 0;
       const isProfit = dayPnL > 0;
       const isBreakEven = dayPnL === 0;
       const isSelected = selectedDate && isSameDay(dateToCheck, selectedDate);
@@ -1355,9 +1465,13 @@ export default function TradingJournalApp() {
         if (isProfit) cardClass = `bg-gradient-to-br from-emerald-600/80 to-emerald-500/60 border-emerald-400`;
         else if (isBreakEven) cardClass = `bg-gradient-to-br from-yellow-600/80 to-yellow-500/60 border-yellow-400`;
         else cardClass = `bg-gradient-to-br from-rose-600/80 to-rose-500/60 border-rose-400`;
+      } else if (isDayOff && !hasTrades) {
+        cardClass = `bg-gradient-to-br from-gray-700/70 to-gray-600/50 border-gray-500`;
+      } else if (hasThoughts && !hasTrades) {
+        cardClass = `bg-gradient-to-br from-purple-600/70 to-purple-500/50 border-purple-400`;
       }
       if (isSelected) cardClass += ` ring-4 ${theme.accentRing} shadow-2xl scale-105`;
-      if (isToday && !isSelected && !hasTrades) cardClass += ` ring-2 ring-blue-500/50`;
+      if (isToday && !isSelected && !hasTrades && !hasThoughts) cardClass += ` ring-2 ring-blue-500/50`;
       
       days.push(
         <div 
@@ -1365,8 +1479,14 @@ export default function TradingJournalApp() {
           onClick={() => { handleDayClick(d); setShowSidebar(true); }} 
           className={`w-full aspect-square rounded-full ${cardClass} cursor-pointer transition-all relative flex flex-col items-center justify-center p-1.5 sm:p-2 ${isSelected ? 'z-10' : ''} active:scale-95 shadow-lg`}
         >
-          <span className={`text-sm sm:text-base font-bold ${hasTrades || isSelected ? 'text-white' : theme.textMain}`}>{d}</span>
-          {!hasTrades && isToday && (
+          <span className={`text-sm sm:text-base font-bold ${hasTrades || hasThoughts || isDayOff || isSelected ? 'text-white' : theme.textMain}`}>{d}</span>
+          {isDayOff && !hasTrades && (
+            <CalendarX size={12} className="absolute -top-1 -right-1 text-gray-300 bg-gray-700/50 rounded-full p-0.5" />
+          )}
+          {hasThoughts && !hasTrades && !isDayOff && (
+            <Brain size={12} className="absolute -top-1 -right-1 text-purple-300 bg-purple-700/50 rounded-full p-0.5" />
+          )}
+          {!hasTrades && !hasThoughts && !isDayOff && isToday && (
             <div className="absolute -top-1 -right-1 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-blue-500 rounded-full border-2 border-white shadow"></div>
           )}
         </div>
@@ -2043,7 +2163,7 @@ export default function TradingJournalApp() {
       )}
 
       {/* View Entry Modal */}
-      {isViewEntryModalOpen && viewingEntry && (
+      {isViewEntryModalOpen && viewingEntry && !viewingEntry.entryType && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className={`w-full max-w-md p-6 rounded-2xl shadow-2xl border ${theme.bgCard} ${theme.border} transform transition-all scale-100`}>
             <div className="flex justify-between items-center mb-6">
@@ -2163,6 +2283,122 @@ export default function TradingJournalApp() {
                     setIsEditEntryModalOpen(false); 
                     setEditingEntry(null); 
                     setFormState({ pair: '', type: 'BUY', rr: '', pnl: '', notes: '', screenshotUrl: '' }); 
+                  }} 
+                  variant="ghost" 
+                  theme={theme} 
+                  className="flex-1"
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" className="flex-1" theme={theme}>
+                  Guardar Cambios
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Thought Modal */}
+      {isAddThoughtModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className={`w-full max-w-md p-6 rounded-2xl shadow-2xl border ${theme.bgCard} ${theme.border} transform transition-all scale-100`}>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className={clsx("text-xl font-bold", theme.textMain, "flex items-center gap-2")}>
+                <Brain className={theme.accentText} size={24} /> Nuevo Pensamiento
+              </h3>
+              <button 
+                onClick={() => {
+                  setIsAddThoughtModalOpen(false);
+                  setThoughtFormState({ message: '', tradingViewUrl: '' });
+                }} 
+                className={`${theme.textMuted} hover:${theme.textMain} transition-colors`}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleAddThought} className="space-y-4">
+              <div className="w-full">
+                <textarea 
+                  value={thoughtFormState.message} 
+                  onChange={(e) => setThoughtFormState({...thoughtFormState, message: e.target.value})} 
+                  placeholder="Análisis del mercado, pensamientos, observaciones..." 
+                  className={`${theme.bgInput} border ${theme.border} ${theme.textMain} px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:${theme.accentRing} transition-all placeholder-opacity-40 resize-none h-32 w-full text-sm`}
+                />
+              </div>
+              <div className="w-full">
+                <Input 
+                  label="Trading View URL:" 
+                  value={thoughtFormState.tradingViewUrl} 
+                  onChange={(e) => setThoughtFormState({...thoughtFormState, tradingViewUrl: e.target.value})} 
+                  placeholder="https://www.tradingview.com/x/..." 
+                  theme={theme} 
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <Button 
+                  onClick={() => {
+                    setIsAddThoughtModalOpen(false);
+                    setThoughtFormState({ message: '', tradingViewUrl: '' });
+                  }} 
+                  variant="ghost" 
+                  theme={theme} 
+                  className="flex-1"
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" className="flex-1" theme={theme}>
+                  Agregar Pensamiento
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Thought Modal */}
+      {isEditThoughtModalOpen && editingThought && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className={`w-full max-w-md p-6 rounded-2xl shadow-2xl border ${theme.bgCard} ${theme.border} transform transition-all scale-100`}>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className={clsx("text-xl font-bold", theme.textMain, "flex items-center gap-2")}>
+                <Brain className={theme.accentText} size={24} /> Editar Pensamiento
+              </h3>
+              <button 
+                onClick={() => {
+                  setIsEditThoughtModalOpen(false);
+                  setEditingThought(null);
+                  setThoughtFormState({ message: '', tradingViewUrl: '' });
+                }} 
+                className={`${theme.textMuted} hover:${theme.textMain} transition-colors`}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleUpdateThought} className="space-y-4">
+              <div className="w-full">
+                <textarea 
+                  value={thoughtFormState.message} 
+                  onChange={(e) => setThoughtFormState({...thoughtFormState, message: e.target.value})} 
+                  placeholder="Análisis del mercado, pensamientos, observaciones..." 
+                  className={`${theme.bgInput} border ${theme.border} ${theme.textMain} px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:${theme.accentRing} transition-all placeholder-opacity-40 resize-none h-32 w-full text-sm`}
+                />
+              </div>
+              <div className="w-full">
+                <Input 
+                  label="Trading View URL:" 
+                  value={thoughtFormState.tradingViewUrl} 
+                  onChange={(e) => setThoughtFormState({...thoughtFormState, tradingViewUrl: e.target.value})} 
+                  placeholder="https://www.tradingview.com/x/..." 
+                  theme={theme} 
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <Button 
+                  onClick={() => {
+                    setIsEditThoughtModalOpen(false);
+                    setEditingThought(null);
+                    setThoughtFormState({ message: '', tradingViewUrl: '' });
                   }} 
                   variant="ghost" 
                   theme={theme} 
@@ -2319,24 +2555,95 @@ export default function TradingJournalApp() {
                 <div className="flex justify-between items-end mt-4"><div><div className={`text-xs ${theme.textMuted} uppercase font-bold tracking-wider`}>Resultado</div><div className={`text-2xl sm:text-3xl font-mono font-bold ${metrics.daily.val >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{metrics.daily.val >= 0 ? '+' : ''}{metrics.daily.val}$</div></div><div className="text-right"><div className={`text-xs ${theme.textMuted} uppercase font-bold`}>Trades</div><div className={clsx("text-lg sm:text-xl font-bold", theme.textMain)}>{metrics.daily.count}</div></div></div>
               </div>
               <div className={`flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 ${theme.bgSec}`}>
-                {entries.filter(e => isSameDay(new Date(e.date), selectedDate)).length === 0 ? (
-                  <div className="text-center py-20 opacity-40"><PieChart size={64} className={`mx-auto mb-4 ${theme.textMuted}`} /><p className={theme.textSec}>Sin operaciones este día</p></div>
-                ) : (
-                  entries.filter(e => isSameDay(new Date(e.date), selectedDate)).map(entry => (
-                    <div key={entry.id} onClick={() => { handleViewEntry(entry); setShowSidebar(false); }} className={`${theme.bgCard} p-3 sm:p-4 rounded-lg sm:rounded-xl border ${theme.border} flex flex-col gap-2 sm:gap-3 group hover:${theme.borderSec} transition-all cursor-pointer`}>
-                      <div className="flex justify-between items-start gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1 flex-wrap"><span className={`text-[10px] font-bold px-2 py-1 rounded uppercase shrink-0 ${entry.type === 'BUY' ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'}`}>{entry.type}</span><span className={`font-bold ${theme.textMain} text-base sm:text-lg truncate`}>{entry.pair}</span>{entry.screenshotUrl && (<a href={entry.screenshotUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className={`ml-1 p-1 rounded hover:${theme.bgSec} ${theme.textMuted} hover:${theme.accentText} transition-colors shrink-0`} title="Ver Captura"><ExternalLink size={12} /></a>)}</div>
-                          <div className={`text-xs ${theme.textMuted} font-medium flex items-center gap-2`}><Target size={12} /> R:R {entry.rr}</div>
+                {(() => {
+                  const dayEntries = entries.filter(e => isSameDay(new Date(e.date), selectedDate));
+                  const dayTrades = dayEntries.filter(e => e.entryType !== 'thought' && e.entryType !== 'dayoff');
+                  const dayThoughts = dayEntries.filter(e => e.entryType === 'thought');
+                  const dayOff = dayEntries.find(e => e.entryType === 'dayoff');
+                  
+                  if (dayTrades.length === 0 && dayThoughts.length === 0 && !dayOff) {
+                    return <div className="text-center py-20 opacity-40"><PieChart size={64} className={`mx-auto mb-4 ${theme.textMuted}`} /><p className={theme.textSec}>Sin operaciones este día</p></div>;
+                  }
+                  
+                  return (
+                    <>
+                      {/* Day Off Indicator */}
+                      {dayOff && (
+                        <div className={`${theme.bgCard} p-3 sm:p-4 rounded-lg sm:rounded-xl border ${theme.border} flex items-center gap-3 mb-4`}>
+                          <CalendarX size={24} className={`${theme.accentText}`} />
+                          <div className="flex-1">
+                            <div className={`text-lg font-bold ${theme.textMain}`}>DAY OFF</div>
+                            <div className={`text-xs ${theme.textMuted}`}>Día libre</div>
+                          </div>
+                          <button onClick={(e) => { e.stopPropagation(); handleToggleDayOff(); }} className={`${theme.textSec} hover:text-rose-500 transition-colors`}><Trash2 size={16} /></button>
                         </div>
-                        <div className="text-right shrink-0"><div className={`font-mono text-base sm:text-lg font-bold ${entry.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{entry.pnl >= 0 ? '+' : ''}{entry.pnl}$</div><button onClick={(e) => { e.stopPropagation(); handleDeleteEntry(entry.id); }} className={`${theme.textSec} hover:text-rose-500 transition-colors mt-1 sm:mt-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100`}><Trash2 size={14} /></button></div>
-                      </div>
-                      {entry.notes && (<div className={`text-xs ${theme.textMuted} italic border-t ${theme.borderSec} pt-2 mt-1 flex gap-2 items-start`}><MessageSquare size={12} className="mt-0.5 opacity-50 shrink-0" /><span className="line-clamp-2 sm:hover:line-clamp-none transition-all">{entry.notes}</span></div>)}
-                    </div>
-                  ))
-                )}
+                      )}
+                      
+                      {/* Trading Entries */}
+                      {dayTrades.length > 0 && (
+                        <>
+                          <div className={`text-xs ${theme.textMuted} uppercase font-bold tracking-wider mb-2 px-1`}>Operaciones</div>
+                          {dayTrades.map(entry => (
+                            <div key={entry.id} onClick={() => { handleViewEntry(entry); setShowSidebar(false); }} className={`${theme.bgCard} p-3 sm:p-4 rounded-lg sm:rounded-xl border ${theme.border} flex flex-col gap-2 sm:gap-3 group hover:${theme.borderSec} transition-all cursor-pointer`}>
+                              <div className="flex justify-between items-start gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1 flex-wrap"><span className={`text-[10px] font-bold px-2 py-1 rounded uppercase shrink-0 ${entry.type === 'BUY' ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'}`}>{entry.type}</span><span className={`font-bold ${theme.textMain} text-base sm:text-lg truncate`}>{entry.pair}</span>{entry.screenshotUrl && (<a href={entry.screenshotUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className={`ml-1 p-1 rounded hover:${theme.bgSec} ${theme.textMuted} hover:${theme.accentText} transition-colors shrink-0`} title="Ver Captura"><ExternalLink size={12} /></a>)}</div>
+                                  <div className={`text-xs ${theme.textMuted} font-medium flex items-center gap-2`}><Target size={12} /> R:R {entry.rr}</div>
+                                </div>
+                                <div className="text-right shrink-0"><div className={`font-mono text-base sm:text-lg font-bold ${entry.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{entry.pnl >= 0 ? '+' : ''}{entry.pnl}$</div><button onClick={(e) => { e.stopPropagation(); handleDeleteEntry(entry.id); }} className={`${theme.textSec} hover:text-rose-500 transition-colors mt-1 sm:mt-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100`}><Trash2 size={14} /></button></div>
+                              </div>
+                              {entry.notes && (<div className={`text-xs ${theme.textMuted} italic border-t ${theme.borderSec} pt-2 mt-1 flex gap-2 items-start`}><MessageSquare size={12} className="mt-0.5 opacity-50 shrink-0" /><span className="line-clamp-2 sm:hover:line-clamp-none transition-all">{entry.notes}</span></div>)}
+                            </div>
+                          ))}
+                        </>
+                      )}
+                      
+                      {/* Thoughts */}
+                      {dayThoughts.length > 0 && (
+                        <>
+                          <div className={`text-xs ${theme.textMuted} uppercase font-bold tracking-wider mb-2 px-1 mt-4`}>Pensamientos</div>
+                          {dayThoughts.map(thought => (
+                            <div key={thought.id} className={`${theme.bgCard} p-3 sm:p-4 rounded-lg sm:rounded-xl border ${theme.border} flex flex-col gap-2 sm:gap-3 group hover:${theme.borderSec} transition-all`}>
+                              <div className="flex justify-between items-start gap-2">
+                                <div className="flex-1 min-w-0 flex items-start gap-2">
+                                  <Brain size={16} className={`${theme.accentText} mt-0.5 shrink-0`} />
+                                  <div className="flex-1">
+                                    {thought.message && (
+                                      <div className={`text-sm ${theme.textMain} mb-2`}>{thought.message}</div>
+                                    )}
+                                    {thought.tradingViewUrl && (
+                                      <a href={thought.tradingViewUrl} target="_blank" rel="noopener noreferrer" className={`text-xs ${theme.accentText} hover:underline flex items-center gap-1`}>
+                                        <ExternalLink size={12} /> Ver en TradingView
+                                      </a>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex gap-1 shrink-0">
+                                  <button onClick={(e) => { e.stopPropagation(); handleEditThought(thought); }} className={`${theme.textSec} hover:${theme.accentText} transition-colors opacity-100 sm:opacity-0 sm:group-hover:opacity-100`}><Edit2 size={14} /></button>
+                                  <button onClick={(e) => { e.stopPropagation(); handleDeleteThought(thought.id); }} className={`${theme.textSec} hover:text-rose-500 transition-colors opacity-100 sm:opacity-0 sm:group-hover:opacity-100`}><Trash2 size={14} /></button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
-              <div className={`p-3 sm:p-5 ${theme.bgCard} border-t ${theme.border}`}><Button onClick={() => { setIsAddEntryModalOpen(true); setShowSidebar(false); }} className="w-full py-2 sm:py-3 text-sm sm:text-base" theme={theme}><Plus size={18} /> Añadir Nueva Entrada</Button></div>
+              <div className={`p-3 sm:p-5 ${theme.bgCard} border-t ${theme.border} space-y-2`}>
+                <Button onClick={() => { setIsAddEntryModalOpen(true); setShowSidebar(false); }} className="w-full py-2 sm:py-3 text-sm sm:text-base" theme={theme}><Plus size={18} /> Añadir Nueva Entrada</Button>
+                <Button onClick={() => { setIsAddThoughtModalOpen(true); setShowSidebar(false); }} variant="ghost" className="w-full py-2 sm:py-3 text-sm sm:text-base" theme={theme}><Brain size={18} /> Añadir Pensamiento</Button>
+                <Button onClick={handleToggleDayOff} variant="ghost" className={`w-full py-2 sm:py-3 text-sm sm:text-base ${(() => {
+                  const dayEntries = entries.filter(e => isSameDay(new Date(e.date), selectedDate));
+                  const isDayOff = dayEntries.some(e => e.entryType === 'dayoff');
+                  return isDayOff ? 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30' : '';
+                })()}`} theme={theme}><CalendarX size={18} /> {(() => {
+                  const dayEntries = entries.filter(e => isSameDay(new Date(e.date), selectedDate));
+                  const isDayOff = dayEntries.some(e => e.entryType === 'dayoff');
+                  return isDayOff ? 'Quitar Day Off' : 'Marcar como Day Off';
+                })()}</Button>
+              </div>
             </div>
           ) : (
             <div className={`flex flex-col h-full relative transition-all duration-300 ${isDragging ? `${theme.bgCard50} border-2 ${theme.accentBorder} border-dashed` : theme.bgSec}`} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
