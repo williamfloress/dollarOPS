@@ -64,17 +64,25 @@ export const signUp = async (email, password, username) => {
   }
 
   try {
+    // Get the current origin for redirect URL
+    const redirectUrl = `${window.location.origin}${window.location.pathname}`;
+    
     // Sign up with email and password
+    // Note: Email confirmation is required (configured in Supabase dashboard)
+    // The user will receive an email with a verification link
     const { data: authData, error: authError } = await supabaseClient.auth.signUp({
       email,
       password,
+      options: {
+        emailRedirectTo: redirectUrl,
+      },
     });
 
     if (authError) {
       return { user: null, error: authError };
     }
 
-    // Create user profile
+    // Create user profile (only if user exists - might not exist if email confirmation is required)
     if (authData.user) {
       const { error: profileError } = await supabaseClient
         .from('user_profiles')
@@ -100,6 +108,8 @@ export const signUp = async (email, password, username) => {
       }
     }
 
+    // Return user data (user might not be confirmed yet)
+    // The user will need to verify their email before they can sign in
     return { user: authData.user, error: null };
   } catch (error) {
     console.error('Error signing up:', error);
@@ -221,7 +231,9 @@ export const loadJournalDataFromSupabase = async (userId) => {
       entries: (entries || []).map(entry => ({
         id: entry.id,
         date: entry.date,
-        entryType: entry.entry_type || undefined,
+        // Convert 'operation' to undefined for backward compatibility with UI code
+        // UI code checks !entry.entryType to identify trading entries
+        entryType: entry.entry_type === 'operation' ? undefined : (entry.entry_type || undefined),
         pair: entry.pair || undefined,
         type: entry.type || undefined,
         rr: entry.rr || undefined,
@@ -281,7 +293,8 @@ export const saveJournalDataToSupabase = async (userId, journalData) => {
         id: entry.id,
         user_id: userId,
         date: entry.date,
-        entry_type: entry.entryType || null,
+        // Default to 'operation' for trading entries (when entryType is undefined/null)
+        entry_type: entry.entryType || 'operation',
         pair: entry.pair || null,
         type: entry.type || null,
         rr: entry.rr || null,

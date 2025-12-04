@@ -44,7 +44,8 @@ import {
   loadJournalData, 
   clearJournalData, 
   downloadJournalData, 
-  importJournalDataFromFile 
+  importJournalDataFromFile,
+  STORAGE_KEYS
 } from './utils/storage';
 import { isSupabaseConfigured, getCurrentUser, signOut } from './utils/supabase.js';
 import { Auth } from './components/Auth';
@@ -737,9 +738,16 @@ const WelcomeModal = ({ onComplete, defaultTheme }) => {
 // --- Componente Principal ---
 export default function TradingJournalApp() {
   // Check if it's the first time opening the app
+  // For Supabase users, this will be determined from Supabase data, not localStorage
   const [isFirstTime, setIsFirstTime] = useState(() => {
-    const initialized = window.localStorage.getItem('journal_initialized_v1');
-    return initialized === null;
+    // Only use localStorage check if Supabase is not configured
+    // For Supabase users, we'll check Supabase data after loading
+    if (!isSupabaseConfigured()) {
+      const initialized = window.localStorage.getItem('journal_initialized_v1');
+      return initialized === null;
+    }
+    // Default to true for Supabase users until we load their data
+    return true;
   });
   
   // Estado Global con Persistencia (sin datos hardcodeados)
@@ -802,6 +810,22 @@ export default function TradingJournalApp() {
     setUser(newUser);
     if (newUser) {
       console.log('User signed in:', newUser.email);
+      // When user logs in with Supabase, clear localStorage data to prevent conflicts
+      // The app will use Supabase data exclusively
+      if (isSupabaseConfigured()) {
+        console.log('Clearing localStorage data for Supabase user');
+        // Clear localStorage journal data (but keep remembered email)
+        const rememberedEmail = localStorage.getItem('remembered_email');
+        Object.values(STORAGE_KEYS).forEach(key => {
+          localStorage.removeItem(key);
+        });
+        // Restore remembered email
+        if (rememberedEmail) {
+          localStorage.setItem('remembered_email', rememberedEmail);
+        }
+        // Reset to first-time state until we load Supabase data
+        setIsFirstTime(true);
+      }
     } else {
       console.log('User signed out');
     }
@@ -1112,13 +1136,32 @@ export default function TradingJournalApp() {
   }, [showVisionBoardConfig, slideshowDuration]);
 
   // Handle Welcome Modal Completion
-  const handleWelcomeComplete = (preferences) => {
+  const handleWelcomeComplete = async (preferences) => {
     setAppTitle(preferences.title || 'ProTrader Journal');
     setCurrentTheme(preferences.theme);
     setAccountBalance(preferences.initialCapital);
     setAvailablePairs(preferences.pairs);
-    window.localStorage.setItem('journal_initialized_v1', 'true');
     setIsFirstTime(false);
+    
+    // Save initialized state immediately
+    // For Supabase users, this will be saved to Supabase
+    // For localStorage-only users, save to localStorage
+    if (isSupabaseConfigured() && user) {
+      // Save to Supabase with initialized: true
+      const dataToSave = {
+        entries: [],
+        availablePairs: preferences.pairs || [],
+        motivationalImages: [],
+        appTitle: preferences.title || 'ProTrader Journal',
+        accountBalance: preferences.initialCapital || 0,
+        currentTheme: preferences.theme || 'slate_blue',
+        initialized: true
+      };
+      await saveJournalData(dataToSave);
+    } else {
+      // localStorage-only: save to localStorage
+      window.localStorage.setItem('journal_initialized_v1', 'true');
+    }
   };
 
   // --- Load data from Supabase (when authenticated) or localStorage ---
@@ -1143,25 +1186,28 @@ export default function TradingJournalApp() {
           if (data.accountBalance !== undefined) setAccountBalance(data.accountBalance);
           if (data.currentTheme) setCurrentTheme(data.currentTheme);
           
-          // Set isFirstTime to false if:
-          // 1. initialized is explicitly true, OR
-          // 2. Any data exists (entries, pairs, images, or custom title/balance/theme)
-          const hasData = data.initialized === true || 
-            (data.entries && data.entries.length > 0) ||
-            (data.availablePairs && data.availablePairs.length > 0) ||
-            (data.motivationalImages && data.motivationalImages.length > 0) ||
-            (data.appTitle && data.appTitle !== 'ProTrader Journal') ||
-            (data.accountBalance !== undefined && data.accountBalance !== 0) ||
-            (data.currentTheme && data.currentTheme !== 'slate_blue');
-          
-          console.log('Data check:', { hasData, initialized: data.initialized });
-          
-          if (hasData) {
-            setIsFirstTime(false);
-            console.log('Set isFirstTime to false');
+          // For Supabase users, use the initialized field from Supabase
+          // For localStorage-only users, check if any data exists
+          if (isSupabaseConfigured() && user) {
+            // Supabase user: use initialized field directly
+            setIsFirstTime(data.initialized !== true);
+            console.log('Supabase user - isFirstTime:', data.initialized !== true, 'initialized:', data.initialized);
+          } else {
+            // localStorage-only: check if any data exists
+            const hasData = data.initialized === true || 
+              (data.entries && data.entries.length > 0) ||
+              (data.availablePairs && data.availablePairs.length > 0) ||
+              (data.motivationalImages && data.motivationalImages.length > 0) ||
+              (data.appTitle && data.appTitle !== 'ProTrader Journal') ||
+              (data.accountBalance !== undefined && data.accountBalance !== 0) ||
+              (data.currentTheme && data.currentTheme !== 'slate_blue');
+            
+            console.log('localStorage user - hasData:', hasData);
+            setIsFirstTime(!hasData);
           }
         } else {
           console.log('No data loaded - will show first-time setup');
+          setIsFirstTime(true);
         }
       } catch (error) {
         console.error('Error loading journal data:', error);
@@ -1174,7 +1220,7 @@ export default function TradingJournalApp() {
     }
   }, [user]); // Reload when user changes
 
-  // --- Auto-save to localStorage when data changes (debounced) ---
+  // --- Auto-save when data changes (debounced) ---
   useEffect(() => {
     if (isFirstTime) return;
 
@@ -1186,13 +1232,17 @@ export default function TradingJournalApp() {
         appTitle,
         accountBalance,
         currentTheme,
-        initialized: window.localStorage.getItem('journal_initialized_v1') === 'true'
+        // For Supabase users, initialized should be true if not first time
+        // For localStorage-only users, check localStorage
+        initialized: isSupabaseConfigured() && user 
+          ? true  // Supabase users: if not first time, always initialized
+          : window.localStorage.getItem('journal_initialized_v1') === 'true'
       };
       saveJournalData(allData);
     }, 1000); // Save 1 second after last change
 
     return () => clearTimeout(saveTimeout);
-  }, [entries, availablePairs, motivationalImages, appTitle, accountBalance, currentTheme, isFirstTime]);
+  }, [entries, availablePairs, motivationalImages, appTitle, accountBalance, currentTheme, isFirstTime, user]);
 
   // CSV Parser Helper
   const parseCSVLine = (line) => {

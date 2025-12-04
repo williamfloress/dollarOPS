@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { signIn, signUp, signOut, getCurrentUser, isSupabaseConfigured, getSupabaseClient } from '../utils/supabase.js';
 
+/**
+ * Storage key for remembered email (pre-authentication data)
+ * NOTE: This uses localStorage because it's pre-login data.
+ * After login, all user data should be stored in Supabase (not localStorage).
+ */
+const REMEMBERED_EMAIL_KEY = 'remembered_email';
+
 export const Auth = ({ onAuthChange }) => {
   const [user, setUser] = useState(null);
   const [email, setEmail] = useState('');
@@ -9,6 +16,10 @@ export const Auth = ({ onAuthChange }) => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [rememberEmail, setRememberEmail] = useState(false);
+  const [verificationPending, setVerificationPending] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState('');
+  const [showVerificationLogin, setShowVerificationLogin] = useState(false);
 
   useEffect(() => {
     if (!isSupabaseConfigured()) {
@@ -17,10 +28,51 @@ export const Auth = ({ onAuthChange }) => {
       return;
     }
 
+    // Handle email verification callback from URL
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      // Check for email verification tokens in URL hash
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const type = hashParams.get('type');
+      const hasVerificationParams = type === 'email' || type === 'signup' || hashParams.has('access_token');
+      
+      if (hasVerificationParams) {
+        // User clicked verification link - verify email but don't auto-login
+        supabase.auth.getSession().then(async ({ data: { session } }) => {
+          if (session) {
+            // Email is verified, but we want user to log in manually
+            // Sign out the auto-created session
+            await supabase.auth.signOut();
+            setUser(null);
+            if (onAuthChange) onAuthChange(null);
+          }
+          // Show login form with verification success message
+          setShowVerificationLogin(true);
+          // Clear URL hash
+          window.history.replaceState(null, '', window.location.pathname);
+        });
+      } else {
+        // Normal flow - check for existing session
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session) {
+            setUser(session.user);
+            if (onAuthChange) onAuthChange(session.user);
+          }
+        });
+      }
+    }
+
+    // Load remembered email from localStorage (pre-authentication, so localStorage is appropriate)
+    // After login, all user data should come from Supabase, not localStorage
+    const rememberedEmail = localStorage.getItem(REMEMBERED_EMAIL_KEY);
+    if (rememberedEmail) {
+      setEmail(rememberedEmail);
+      setRememberEmail(true);
+    }
+
     checkUser();
     
     // Listen for auth changes
-    const supabase = getSupabaseClient();
     if (supabase) {
       const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
         setUser(session?.user || null);
@@ -53,6 +105,17 @@ export const Auth = ({ onAuthChange }) => {
       let result;
       if (isSignUp) {
         result = await signUp(email, password, username);
+        
+        // After sign up, show verification pending page instead of logging in
+        if (!result.error) {
+          setVerificationPending(true);
+          setPendingEmail(email);
+          // Reset form but keep email for display
+          setPassword('');
+          setUsername('');
+          setLoading(false);
+          return;
+        }
       } else {
         result = await signIn(email, password);
       }
@@ -62,10 +125,20 @@ export const Auth = ({ onAuthChange }) => {
       } else {
         setUser(result.user);
         if (onAuthChange) onAuthChange(result.user);
+        
+        // Handle remember email functionality (pre-authentication data, so localStorage is appropriate)
+        // NOTE: After login, all user data should be stored in Supabase, not localStorage
+        if (!isSignUp && rememberEmail) {
+          localStorage.setItem(REMEMBERED_EMAIL_KEY, email);
+        } else if (!isSignUp && !rememberEmail) {
+          localStorage.removeItem(REMEMBERED_EMAIL_KEY);
+        }
+        
         // Reset form
         setEmail('');
         setPassword('');
         setUsername('');
+        setShowVerificationLogin(false);
       }
     } catch (err) {
       setError(err.message);
@@ -107,8 +180,52 @@ export const Auth = ({ onAuthChange }) => {
     );
   }
 
+  // Show verification pending page after sign up
+  if (verificationPending) {
+    return (
+      <div className="p-6 bg-slate-800 rounded-lg max-w-md mx-auto">
+        <div className="text-center mb-6">
+          <div className="mx-auto w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mb-4">
+            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-slate-200 mb-2">Check Your Email</h2>
+          <p className="text-slate-400 mb-4">
+            We've sent a verification email to <span className="font-semibold text-slate-200">{pendingEmail}</span>
+          </p>
+          <p className="text-sm text-slate-500 mb-6">
+            Please check your email and click on the verification link to activate your account. 
+            After clicking the link, you'll be asked to sign in with your email and password.
+          </p>
+        </div>
+        <div className="space-y-3">
+          <button
+            onClick={() => {
+              setVerificationPending(false);
+              setPendingEmail('');
+              setIsSignUp(false);
+            }}
+            className="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Back to Sign In
+          </button>
+          <p className="text-xs text-center text-slate-500">
+            Didn't receive the email? Check your spam folder or try signing up again.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 bg-slate-800 rounded-lg max-w-md mx-auto">
+      {showVerificationLogin && (
+        <div className="mb-4 p-3 bg-blue-900/50 border border-blue-700 rounded text-blue-200 text-sm">
+          <p className="font-semibold mb-1">Email Verified!</p>
+          <p>Please sign in with your email and password to continue.</p>
+        </div>
+      )}
       <h2 className="text-xl font-bold text-slate-200 mb-4">
         {isSignUp ? 'Sign Up' : 'Sign In'}
       </h2>
@@ -155,6 +272,28 @@ export const Auth = ({ onAuthChange }) => {
             minLength={6}
           />
         </div>
+
+        {!isSignUp && (
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="rememberEmail"
+              checked={rememberEmail}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setRememberEmail(checked);
+                // If unchecking, clear the stored email immediately (pre-auth data, localStorage is fine)
+                if (!checked) {
+                  localStorage.removeItem(REMEMBERED_EMAIL_KEY);
+                }
+              }}
+              className="w-4 h-4 text-blue-600 bg-slate-900 border-slate-700 rounded focus:ring-blue-500 focus:ring-2"
+            />
+            <label htmlFor="rememberEmail" className="ml-2 text-sm text-slate-300 cursor-pointer">
+              Remember email
+            </label>
+          </div>
+        )}
 
         <button
           type="submit"

@@ -163,10 +163,12 @@ export const loadJournalData = async () => {
     const { useSupabase, userId } = await getStorageMode();
 
     if (useSupabase && userId) {
-      // Try Supabase first
+      // When Supabase is configured and user is authenticated, ONLY use Supabase data
+      // Do NOT fall back to localStorage - this ensures new users see fresh data
       const { data, error } = await loadJournalDataFromSupabase(userId);
       if (data && !error) {
-        // Check if Supabase data is actually empty (no user data, just defaults)
+        // Always use Supabase data, even if it's empty (for new users)
+        // Only sync to localStorage as backup if there's actual user data
         const hasActualData = 
           (data.entries && data.entries.length > 0) ||
           (data.availablePairs && data.availablePairs.length > 0) ||
@@ -177,27 +179,24 @@ export const loadJournalData = async () => {
           data.initialized === true;
         
         if (hasActualData) {
-          // Also sync to localStorage as backup
+          // Sync to localStorage as backup only if user has actual data
           saveJournalDataToLocalStorage(data);
-          return data;
-        } else {
-          // Supabase has empty/default data, check localStorage for existing data
-          console.log('Supabase data is empty, checking localStorage...');
-          const localData = loadJournalDataFromLocalStorage();
-          if (localData && (
-            (localData.entries && localData.entries.length > 0) ||
-            (localData.availablePairs && localData.availablePairs.length > 0) ||
-            (localData.motivationalImages && localData.motivationalImages.length > 0)
-          )) {
-            console.log('Found data in localStorage, using it instead');
-            return localData;
-          }
-          // No data in either place, return Supabase defaults
-          return data;
         }
+        // Always return Supabase data (even if empty for new users)
+        return data;
       } else {
-        console.warn('Supabase load failed, falling back to localStorage:', error);
-        // Fall through to localStorage
+        console.warn('Supabase load failed:', error);
+        // For authenticated Supabase users, return empty data structure instead of localStorage
+        // This ensures new users see first-time setup
+        return {
+          entries: [],
+          availablePairs: [],
+          motivationalImages: [],
+          appTitle: 'ProTrader Journal',
+          accountBalance: 0,
+          currentTheme: 'slate_blue',
+          initialized: false
+        };
       }
     }
 

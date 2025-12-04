@@ -75,7 +75,7 @@ CREATE TABLE public.entries (
     id BIGINT PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     date TIMESTAMP WITH TIME ZONE NOT NULL,
-    entry_type VARCHAR(20), -- NULL for trading entries, 'thought' or 'dayoff' for others
+    entry_type VARCHAR(20) NOT NULL DEFAULT 'operation', -- 'operation' for trading entries, 'thought' or 'dayoff' for others
     pair VARCHAR(20), -- NULL for non-trading entries
     type VARCHAR(10), -- 'BUY' or 'SELL', NULL for non-trading entries
     rr VARCHAR(10), -- Risk/Reward ratio, NULL for non-trading entries
@@ -85,7 +85,8 @@ CREATE TABLE public.entries (
     message TEXT, -- For thought and dayoff entries
     trading_view_url TEXT, -- For thought entries
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+    CONSTRAINT check_entry_type CHECK (entry_type IN ('operation', 'thought', 'dayoff'))
 );
 
 -- Trading Pairs table (user-specific)
@@ -305,10 +306,18 @@ COMMENT ON TABLE public.entries IS 'Journal entries: trading operations, thought
 COMMENT ON TABLE public.trading_pairs IS 'Available trading pairs per user';
 COMMENT ON TABLE public.motivational_images IS 'Motivational images for vision board (base64 encoded)';
 
-COMMENT ON COLUMN public.entries.entry_type IS 'NULL for trading entries, ''thought'' or ''dayoff'' for others';
+COMMENT ON COLUMN public.entries.entry_type IS '''operation'' for trading entries, ''thought'' or ''dayoff'' for others';
 COMMENT ON COLUMN public.entries.pair IS 'Trading pair (e.g., EURUSD), NULL for non-trading entries';
 COMMENT ON COLUMN public.entries.type IS 'Trade direction: ''BUY'' or ''SELL'', NULL for non-trading entries';
 COMMENT ON COLUMN public.entries.pnl IS 'Profit and Loss amount, NULL for non-trading entries';
+
+-- ============================================
+-- MIGRATION: Update existing NULL entry_type to 'operation'
+-- ============================================
+-- If you have existing entries with NULL entry_type, run this to update them:
+-- UPDATE public.entries 
+-- SET entry_type = 'operation' 
+-- WHERE entry_type IS NULL;
 
 -- ============================================
 -- Verification Queries (optional - uncomment to run)
