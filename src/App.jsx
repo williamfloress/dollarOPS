@@ -45,6 +45,8 @@ import {
   downloadJournalData, 
   importJournalDataFromFile 
 } from './utils/storage';
+import { isSupabaseConfigured, getCurrentUser } from './utils/supabase.js';
+import { Auth } from './components/Auth';
 
 // --- DEFINICIÓN DE TEMAS ---
 const THEMES = {
@@ -789,6 +791,41 @@ export default function TradingJournalApp() {
   const [formState, setFormState] = useState({ pair: '', type: 'BUY', rr: '', pnl: '', notes: '', screenshotUrl: '' });
   const [thoughtFormState, setThoughtFormState] = useState({ message: '', tradingViewUrl: '' });
   const RR_OPTIONS = ['SL', 'BE', '1:1', '1:2', '1:3', '1:4', '1:5'];
+
+  // Authentication state
+  const [user, setUser] = useState(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // Auth change handler
+  const handleAuthChange = (newUser) => {
+    setUser(newUser);
+    if (newUser) {
+      console.log('User signed in:', newUser.email);
+    } else {
+      console.log('User signed out');
+    }
+  };
+
+  // Check authentication status on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (!isSupabaseConfigured()) {
+        setIsCheckingAuth(false);
+        return;
+      }
+      
+      try {
+        const { user: currentUser } = await getCurrentUser();
+        setUser(currentUser);
+      } catch (error) {
+        console.error('Error checking auth:', error);
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+    
+    checkAuth();
+  }, []);
 
   // Sync theme type filter when current theme changes
   useEffect(() => {

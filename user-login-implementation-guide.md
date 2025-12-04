@@ -24,11 +24,11 @@ Before starting, verify you have completed these prerequisites:
 
 Before starting, verify that your Supabase setup is correct.
 
-- [ ] **1.1** Check that `.env` file exists in project root
-- [ ] **1.2** Verify `.env` contains `VITE_SUPABASE_URL` with your project URL
-- [ ] **1.3** Verify `.env` contains `VITE_SUPABASE_ANON_KEY` with your anon key
-- [ ] **1.4** Restart dev server (required after adding/changing `.env`)
-- [ ] **1.5** Add temporary test in `App.jsx` to verify configuration:
+- [x] **1.1** Check that `.env` file exists in project root
+- [x] **1.2** Verify `.env` contains `VITE_SUPABASE_URL` with your project URL
+- [x] **1.3** Verify `.env` contains `VITE_SUPABASE_ANON_KEY` with your anon key
+- [x] **1.4** Restart dev server (required after adding/changing `.env`)
+- [x] **1.5** Add temporary test in `App.jsx` to verify configuration:
 
 ```javascript
 import { isSupabaseConfigured } from './utils/supabase.js';
@@ -37,8 +37,8 @@ import { isSupabaseConfigured } from './utils/supabase.js';
 console.log('Supabase configured:', isSupabaseConfigured());
 ```
 
-- [ ] **1.6** Check browser console - should see `Supabase configured: true`
-- [ ] **1.7** Remove the test console.log after verification
+- [x] **1.6** Check browser console - should see `Supabase configured: true`
+- [x] **1.7** Remove the test console.log after verification
 
 **✅ Checkpoint 1 Complete:** Supabase is configured and ready to use.
 
@@ -48,22 +48,22 @@ console.log('Supabase configured:', isSupabaseConfigured());
 
 **Goal:** Add user state and authentication checking to your app.
 
-- [ ] **2.1** Open `src/App.jsx`
-- [ ] **2.2** Add imports at the top:
+- [x] **2.1** Open `src/App.jsx`
+- [x] **2.2** Add imports at the top:
 
 ```javascript
 import { Auth } from './components/Auth';
 import { isSupabaseConfigured, getCurrentUser } from './utils/supabase.js';
 ```
 
-- [ ] **2.3** Add user state variables in your main component:
+- [x] **2.3** Add user state variables in your main component:
 
 ```javascript
 const [user, setUser] = useState(null);
 const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 ```
 
-- [ ] **2.4** Add `useEffect` to check auth on mount (add after your existing state declarations):
+- [x] **2.4** Add `useEffect` to check auth on mount (add after your existing state declarations):
 
 ```javascript
 // Check authentication status on mount
@@ -88,7 +88,7 @@ useEffect(() => {
 }, []);
 ```
 
-- [ ] **2.5** Add auth change handler function:
+- [x] **2.5** Add auth change handler function:
 
 ```javascript
 const handleAuthChange = (newUser) => {
