@@ -1426,7 +1426,7 @@ export default function TradingJournalApp() {
               {hasThoughts && !isDayOff && (<div className={`text-xs font-bold px-1.5 py-0.5 rounded shrink-0 bg-purple-500/20 text-purple-300 flex items-center gap-1`} title={`${dayThoughts.length} ${dayThoughts.length === 1 ? 'pensamiento' : 'pensamientos'}`}><Brain size={10} /> {dayThoughts.length}</div>)}
             </div>
           </div>
-          {hasTrades ? (<div className={`text-lg font-mono font-bold tracking-tight truncate ${theme.textSec}`}>{dayPnL > 0 ? '+' : ''}{dayPnL}$</div>) : isDayOff ? (<div className={`text-xs ${theme.textMuted} font-bold uppercase flex items-center gap-1`}><CalendarX size={14} /> Day Off</div>) : hasThoughts ? (<div className={`text-xs ${theme.textMuted} flex items-center gap-1`}><Brain size={14} /> Pensamiento</div>) : (<div className="opacity-0 group-hover:opacity-100 transition-opacity absolute inset-0 flex items-center justify-center bg-black/20"><Plus className={theme.textSec} size={16} /></div>)}
+          {hasTrades ? (<div className={`text-lg font-mono font-bold tracking-tight truncate ${theme.textSec}`}>{dayPnL > 0 ? '+' : ''}{dayPnL.toFixed(2)}$</div>) : isDayOff ? (<div className={`text-xs ${theme.textMuted} font-bold uppercase flex items-center gap-1`}><CalendarX size={14} /> Day Off</div>) : hasThoughts ? (<div className={`text-xs ${theme.textMuted} flex items-center gap-1`}><Brain size={14} /> Pensamiento</div>) : (<div className="opacity-0 group-hover:opacity-100 transition-opacity absolute inset-0 flex items-center justify-center bg-black/20"><Plus className={theme.textSec} size={16} /></div>)}
         </div>
       );
     }
@@ -2188,7 +2188,7 @@ export default function TradingJournalApp() {
               <div className={`${theme.bgSec} border ${theme.border} rounded-lg p-4`}>
                 <div className={`text-xs ${theme.textMuted} uppercase font-bold tracking-wider mb-2`}>Resultado</div>
                 <div className={`text-3xl font-mono font-bold ${viewingEntry.pnl >= 0 ? 'text-emerald-400' : viewingEntry.pnl === 0 ? 'text-yellow-400' : 'text-rose-400'}`}>
-                  {viewingEntry.pnl >= 0 ? '+' : ''}{viewingEntry.pnl}$
+                  {viewingEntry.pnl >= 0 ? '+' : ''}{parseFloat(viewingEntry.pnl).toFixed(2)}$
                 </div>
               </div>
 
@@ -2485,7 +2485,7 @@ export default function TradingJournalApp() {
                     </div>
                     <div>
                       <div className={`text-xs ${theme.textMuted} mb-1`}>P/L Total</div>
-                      <div className={`text-lg font-bold ${metrics.global.val >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{metrics.global.val >= 0 ? '+' : ''}{metrics.global.val}$</div>
+                      <div className={`text-lg font-bold ${metrics.global.val >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{metrics.global.val >= 0 ? '+' : ''}{metrics.global.val.toFixed(2)}$</div>
                     </div>
                     <div className="col-span-2">
                       <div className={`text-xs ${theme.textMuted} mb-1`}>Balance Total</div>
@@ -2501,19 +2501,19 @@ export default function TradingJournalApp() {
                     <div>
                       <div className={`text-xs ${theme.textMuted} mb-1`}>Semana</div>
                       <div className={`text-base font-bold ${metrics.weekly.val >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {showMetricsAsPercentage && accountBalance > 0 ? `${((metrics.weekly.val / accountBalance) * 100).toFixed(1)}%` : `${metrics.weekly.val >= 0 ? '+' : ''}${metrics.weekly.val}$`} ({metrics.weekly.count} trades)
+                        {showMetricsAsPercentage && accountBalance > 0 ? `${((metrics.weekly.val / accountBalance) * 100).toFixed(1)}%` : `${metrics.weekly.val >= 0 ? '+' : ''}${metrics.weekly.val.toFixed(2)}$`} ({metrics.weekly.count} trades)
                       </div>
                     </div>
                     <div>
                       <div className={`text-xs ${theme.textMuted} mb-1`}>Mes</div>
                       <div className={`text-base font-bold ${metrics.monthly.val >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {showMetricsAsPercentage && accountBalance > 0 ? `${((metrics.monthly.val / accountBalance) * 100).toFixed(1)}%` : `${metrics.monthly.val >= 0 ? '+' : ''}${metrics.monthly.val}$`} ({metrics.monthly.count} trades)
+                        {showMetricsAsPercentage && accountBalance > 0 ? `${((metrics.monthly.val / accountBalance) * 100).toFixed(1)}%` : `${metrics.monthly.val >= 0 ? '+' : ''}${metrics.monthly.val.toFixed(2)}$`} ({metrics.monthly.count} trades)
                       </div>
                     </div>
                     <div>
                       <div className={`text-xs ${theme.textMuted} mb-1`}>Año</div>
                       <div className={`text-base font-bold ${metrics.annual.val >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {showMetricsAsPercentage && accountBalance > 0 ? `${((metrics.annual.val / accountBalance) * 100).toFixed(1)}%` : `${metrics.annual.val >= 0 ? '+' : ''}${metrics.annual.val}$`} ({metrics.annual.count} trades)
+                        {showMetricsAsPercentage && accountBalance > 0 ? `${((metrics.annual.val / accountBalance) * 100).toFixed(1)}%` : `${metrics.annual.val >= 0 ? '+' : ''}${metrics.annual.val.toFixed(2)}$`} ({metrics.annual.count} trades)
                       </div>
                     </div>
                   </div>
@@ -2552,7 +2552,7 @@ export default function TradingJournalApp() {
               <div className={`p-4 sm:p-6 border-b ${theme.borderSec} ${theme.bgCard50}`}>
                 <Button variant="ghost" size="sm" onClick={() => { handleBackToDashboard(); setShowSidebar(false); }} className={`mb-4 -ml-2 ${theme.textSec}`} theme={theme}><ArrowLeft size={16} /> Volver</Button>
                 <h3 className={clsx("text-xl sm:text-2xl font-bold", theme.textMain, "flex items-center gap-2")}><Calendar className={theme.accentText} size={24} />{selectedDate.getDate()} de {selectedDate.toLocaleDateString('es-ES', { month: 'long' })}</h3>
-                <div className="flex justify-between items-end mt-4"><div><div className={`text-xs ${theme.textMuted} uppercase font-bold tracking-wider`}>Resultado</div><div className={`text-2xl sm:text-3xl font-mono font-bold ${metrics.daily.val >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{metrics.daily.val >= 0 ? '+' : ''}{metrics.daily.val}$</div></div><div className="text-right"><div className={`text-xs ${theme.textMuted} uppercase font-bold`}>Trades</div><div className={clsx("text-lg sm:text-xl font-bold", theme.textMain)}>{metrics.daily.count}</div></div></div>
+                <div className="flex justify-between items-end mt-4"><div><div className={`text-xs ${theme.textMuted} uppercase font-bold tracking-wider`}>Resultado</div><div className={`text-2xl sm:text-3xl font-mono font-bold ${metrics.daily.val >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{metrics.daily.val >= 0 ? '+' : ''}{metrics.daily.val.toFixed(2)}$</div></div><div className="text-right"><div className={`text-xs ${theme.textMuted} uppercase font-bold`}>Trades</div><div className={clsx("text-lg sm:text-xl font-bold", theme.textMain)}>{metrics.daily.count}</div></div></div>
               </div>
               <div className={`flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 ${theme.bgSec}`}>
                 {(() => {
@@ -2590,7 +2590,7 @@ export default function TradingJournalApp() {
                                   <div className="flex items-center gap-2 mb-1 flex-wrap"><span className={`text-[10px] font-bold px-2 py-1 rounded uppercase shrink-0 ${entry.type === 'BUY' ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'}`}>{entry.type}</span><span className={`font-bold ${theme.textMain} text-base sm:text-lg truncate`}>{entry.pair}</span>{entry.screenshotUrl && (<a href={entry.screenshotUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className={`ml-1 p-1 rounded hover:${theme.bgSec} ${theme.textMuted} hover:${theme.accentText} transition-colors shrink-0`} title="Ver Captura"><ExternalLink size={12} /></a>)}</div>
                                   <div className={`text-xs ${theme.textMuted} font-medium flex items-center gap-2`}><Target size={12} /> R:R {entry.rr}</div>
                                 </div>
-                                <div className="text-right shrink-0"><div className={`font-mono text-base sm:text-lg font-bold ${entry.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{entry.pnl >= 0 ? '+' : ''}{entry.pnl}$</div><button onClick={(e) => { e.stopPropagation(); handleDeleteEntry(entry.id); }} className={`${theme.textSec} hover:text-rose-500 transition-colors mt-1 sm:mt-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100`}><Trash2 size={14} /></button></div>
+                                <div className="text-right shrink-0"><div className={`font-mono text-base sm:text-lg font-bold ${entry.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{entry.pnl >= 0 ? '+' : ''}{parseFloat(entry.pnl).toFixed(2)}$</div><button onClick={(e) => { e.stopPropagation(); handleDeleteEntry(entry.id); }} className={`${theme.textSec} hover:text-rose-500 transition-colors mt-1 sm:mt-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100`}><Trash2 size={14} /></button></div>
                               </div>
                               {entry.notes && (<div className={`text-xs ${theme.textMuted} italic border-t ${theme.borderSec} pt-2 mt-1 flex gap-2 items-start`}><MessageSquare size={12} className="mt-0.5 opacity-50 shrink-0" /><span className="line-clamp-2 sm:hover:line-clamp-none transition-all">{entry.notes}</span></div>)}
                             </div>
