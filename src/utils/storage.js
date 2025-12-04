@@ -77,8 +77,9 @@ const saveJournalDataToLocalStorage = (data) => {
 
 /**
  * Load from localStorage (internal helper)
+ * Exported for migration purposes to bypass Supabase checks
  */
-const loadJournalDataFromLocalStorage = () => {
+export const loadJournalDataFromLocalStorage = () => {
   try {
     const entries = localStorage.getItem(STORAGE_KEYS.ENTRIES);
     const pairs = localStorage.getItem(STORAGE_KEYS.PAIRS);

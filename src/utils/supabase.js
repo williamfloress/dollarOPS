@@ -260,15 +260,22 @@ export const saveJournalDataToSupabase = async (userId, journalData) => {
     return { success: false, error: new Error('Supabase not configured or no user ID') };
   }
 
+  const errors = [];
+
   try {
     // Save entries
     if (journalData.entries && Array.isArray(journalData.entries)) {
       // Delete all existing entries and re-insert (simple approach)
       // For production, consider upsert logic
-      await supabaseClient
+      const { error: deleteError } = await supabaseClient
         .from('entries')
         .delete()
         .eq('user_id', userId);
+
+      if (deleteError) {
+        console.error('Error deleting existing entries:', deleteError);
+        errors.push(`Failed to delete existing entries: ${deleteError.message}`);
+      }
 
       const entriesToInsert = journalData.entries.map(entry => ({
         id: entry.id,
@@ -292,16 +299,24 @@ export const saveJournalDataToSupabase = async (userId, journalData) => {
 
         if (entriesError) {
           console.error('Error saving entries:', entriesError);
+          errors.push(`Failed to save entries: ${entriesError.message}`);
+        } else {
+          console.log(`Successfully saved ${entriesToInsert.length} entries`);
         }
       }
     }
 
     // Save trading pairs
     if (journalData.availablePairs && Array.isArray(journalData.availablePairs)) {
-      await supabaseClient
+      const { error: deletePairsError } = await supabaseClient
         .from('trading_pairs')
         .delete()
         .eq('user_id', userId);
+
+      if (deletePairsError) {
+        console.error('Error deleting existing trading pairs:', deletePairsError);
+        errors.push(`Failed to delete existing trading pairs: ${deletePairsError.message}`);
+      }
 
       const pairsToInsert = journalData.availablePairs.map(pair => ({
         user_id: userId,
@@ -315,16 +330,24 @@ export const saveJournalDataToSupabase = async (userId, journalData) => {
 
         if (pairsError) {
           console.error('Error saving trading pairs:', pairsError);
+          errors.push(`Failed to save trading pairs: ${pairsError.message}`);
+        } else {
+          console.log(`Successfully saved ${pairsToInsert.length} trading pairs`);
         }
       }
     }
 
     // Save motivational images
     if (journalData.motivationalImages && Array.isArray(journalData.motivationalImages)) {
-      await supabaseClient
+      const { error: deleteImagesError } = await supabaseClient
         .from('motivational_images')
         .delete()
         .eq('user_id', userId);
+
+      if (deleteImagesError) {
+        console.error('Error deleting existing images:', deleteImagesError);
+        errors.push(`Failed to delete existing images: ${deleteImagesError.message}`);
+      }
 
       const imagesToInsert = journalData.motivationalImages.map(image => ({
         id: image.id.toString(),
@@ -339,6 +362,9 @@ export const saveJournalDataToSupabase = async (userId, journalData) => {
 
         if (imagesError) {
           console.error('Error saving images:', imagesError);
+          errors.push(`Failed to save images: ${imagesError.message}`);
+        } else {
+          console.log(`Successfully saved ${imagesToInsert.length} motivational images`);
         }
       }
     }
@@ -362,7 +388,18 @@ export const saveJournalDataToSupabase = async (userId, journalData) => {
 
       if (prefsError) {
         console.error('Error saving preferences:', prefsError);
+        errors.push(`Failed to save preferences: ${prefsError.message}`);
+      } else {
+        console.log('Successfully saved user preferences');
       }
+    }
+
+    // Return success only if no errors occurred, or partial success with error details
+    if (errors.length > 0) {
+      return { 
+        success: false, 
+        error: new Error(`Migration completed with errors: ${errors.join('; ')}`) 
+      };
     }
 
     return { success: true, error: null };
@@ -383,16 +420,35 @@ export const migrateLocalStorageToSupabase = async (userId) => {
   }
 
   try {
-    // Import loadJournalData from storage utility
-    const { loadJournalData } = await import('./storage.js');
-    const localData = await loadJournalData();
+    // Import loadJournalDataFromLocalStorage to directly load from localStorage
+    // This bypasses the smart loader which would try Supabase first
+    const { loadJournalDataFromLocalStorage } = await import('./storage.js');
+    const localData = loadJournalDataFromLocalStorage();
 
     if (!localData) {
       return { success: false, error: new Error('No localStorage data to migrate') };
     }
 
+    // Log what we're migrating for debugging
+    console.log('Migrating localStorage data to Supabase:', {
+      entriesCount: localData.entries?.length || 0,
+      pairsCount: localData.availablePairs?.length || 0,
+      imagesCount: localData.motivationalImages?.length || 0,
+      hasTitle: !!localData.appTitle,
+      hasBalance: localData.accountBalance !== undefined,
+      hasTheme: !!localData.currentTheme,
+      initialized: localData.initialized
+    });
+
     // Save to Supabase
     const result = await saveJournalDataToSupabase(userId, localData);
+    
+    if (result.success) {
+      console.log('Migration successful - data saved to Supabase');
+    } else {
+      console.error('Migration failed:', result.error);
+    }
+    
     return result;
   } catch (error) {
     console.error('Error migrating localStorage to Supabase:', error);
