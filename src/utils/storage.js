@@ -166,9 +166,35 @@ export const loadJournalData = async () => {
       // Try Supabase first
       const { data, error } = await loadJournalDataFromSupabase(userId);
       if (data && !error) {
-        // Also sync to localStorage as backup
-        saveJournalDataToLocalStorage(data);
-        return data;
+        // Check if Supabase data is actually empty (no user data, just defaults)
+        const hasActualData = 
+          (data.entries && data.entries.length > 0) ||
+          (data.availablePairs && data.availablePairs.length > 0) ||
+          (data.motivationalImages && data.motivationalImages.length > 0) ||
+          (data.appTitle && data.appTitle !== 'ProTrader Journal') ||
+          (data.accountBalance !== undefined && data.accountBalance !== 0) ||
+          (data.currentTheme && data.currentTheme !== 'slate_blue') ||
+          data.initialized === true;
+        
+        if (hasActualData) {
+          // Also sync to localStorage as backup
+          saveJournalDataToLocalStorage(data);
+          return data;
+        } else {
+          // Supabase has empty/default data, check localStorage for existing data
+          console.log('Supabase data is empty, checking localStorage...');
+          const localData = loadJournalDataFromLocalStorage();
+          if (localData && (
+            (localData.entries && localData.entries.length > 0) ||
+            (localData.availablePairs && localData.availablePairs.length > 0) ||
+            (localData.motivationalImages && localData.motivationalImages.length > 0)
+          )) {
+            console.log('Found data in localStorage, using it instead');
+            return localData;
+          }
+          // No data in either place, return Supabase defaults
+          return data;
+        }
       } else {
         console.warn('Supabase load failed, falling back to localStorage:', error);
         // Fall through to localStorage

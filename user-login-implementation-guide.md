@@ -109,8 +109,8 @@ const handleAuthChange = (newUser) => {
 
 **Goal:** Show login screen when not authenticated, journal when authenticated.
 
-- [ ] **3.1** Find the main `return` statement in your component
-- [ ] **3.2** Add loading state check at the very top of return (before any other UI):
+- [x] **3.1** Find the main `return` statement in your component
+- [x] **3.2** Add loading state check at the very top of return (before any other UI):
 
 ```javascript
 // At the top of your return statement
@@ -123,7 +123,7 @@ if (isCheckingAuth) {
 }
 ```
 
-- [ ] **3.3** Add authentication check (right after loading check):
+- [x] **3.3** Add authentication check (right after loading check):
 
 ```javascript
 // If Supabase is configured, show auth if not logged in
@@ -136,9 +136,9 @@ if (isSupabaseConfigured() && !user) {
 }
 ```
 
-- [ ] **3.4** Verify the rest of your journal UI renders after these checks
-- [ ] **3.5** Test: App should show Auth component when Supabase is configured and user is not logged in
-- [ ] **3.6** Test: App should show journal when user is logged in or Supabase is not configured
+- [x] **3.4** Verify the rest of your journal UI renders after these checks
+- [x] **3.5** Test: App should show Auth component when Supabase is configured and user is not logged in
+- [x] **3.6** Test: App should show journal when user is logged in or Supabase is not configured
 
 **✅ Checkpoint 3 Complete:** Authentication UI flow is working.
 
@@ -148,9 +148,9 @@ if (isSupabaseConfigured() && !user) {
 
 **Goal:** Load data from Supabase when user is authenticated, localStorage otherwise.
 
-- [ ] **4.1** Find where you currently load journal data (likely in a `useEffect` or on mount)
-- [ ] **4.2** Replace synchronous `loadJournalData()` calls with async version
-- [ ] **4.3** Add or update data loading `useEffect`:
+- [x] **4.1** Find where you currently load journal data (likely in a `useEffect` or on mount)
+- [x] **4.2** Replace synchronous `loadJournalData()` calls with async version
+- [x] **4.3** Add or update data loading `useEffect`:
 
 ```javascript
 // Replace synchronous localStorage loading with async
@@ -179,9 +179,9 @@ useEffect(() => {
 }, [user]); // Reload when user changes
 ```
 
-- [ ] **4.4** Verify `loadJournalData` is imported from `'./utils/storage'` (should already be imported)
-- [ ] **4.5** Test: Sign in and verify data loads from Supabase
-- [ ] **4.6** Test: Sign out and verify app still works (falls back to localStorage)
+- [x] **4.4** Verify `loadJournalData` is imported from `'./utils/storage'` (should already be imported)
+- [x] **4.5** Test: Sign in and verify data loads from Supabase
+- [x] **4.6** Test: Sign out and verify app still works (falls back to localStorage)
 
 **✅ Checkpoint 4 Complete:** Data loading works with user authentication.
 
@@ -191,8 +191,8 @@ useEffect(() => {
 
 **Goal:** Create component to migrate localStorage data to Supabase on first login.
 
-- [ ] **5.1** Create new file `src/components/MigrationPrompt.jsx`
-- [ ] **5.2** Add imports:
+- [x] **5.1** Create new file `src/components/MigrationPrompt.jsx`
+- [x] **5.2** Add imports:
 
 ```javascript
 import { useState, useEffect } from 'react';
@@ -200,7 +200,7 @@ import { migrateLocalStorageToSupabase } from '../utils/supabase.js';
 import { loadJournalData } from '../utils/storage.js';
 ```
 
-- [ ] **5.3** Create the component with this code:
+- [x] **5.3** Create the component with this code:
 
 ```javascript
 export const MigrationPrompt = ({ user, onMigrationComplete, onDismiss }) => {
@@ -314,13 +314,13 @@ export const MigrationPrompt = ({ user, onMigrationComplete, onDismiss }) => {
 };
 ```
 
-- [ ] **5.4** Import MigrationPrompt in `App.jsx`:
+- [x] **5.4** Import MigrationPrompt in `App.jsx`:
 
 ```javascript
 import { MigrationPrompt } from './components/MigrationPrompt';
 ```
 
-- [ ] **5.5** Add MigrationPrompt component to your render (after Auth check, before main journal UI):
+- [x] **5.5** Add MigrationPrompt component to your render (after Auth check, before main journal UI):
 
 ```javascript
 <MigrationPrompt 
@@ -333,7 +333,7 @@ import { MigrationPrompt } from './components/MigrationPrompt';
 />
 ```
 
-- [ ] **5.6** Test: Create some local data, sign up, verify migration prompt appears
+- [x] **5.6** Test: Create some local data, sign up, verify migration prompt appears
 
 **✅ Checkpoint 5 Complete:** Data migration component is ready.
 

@@ -385,7 +385,7 @@ export const migrateLocalStorageToSupabase = async (userId) => {
   try {
     // Import loadJournalData from storage utility
     const { loadJournalData } = await import('./storage.js');
-    const localData = loadJournalData();
+    const localData = await loadJournalData();
 
     if (!localData) {
       return { success: false, error: new Error('No localStorage data to migrate') };

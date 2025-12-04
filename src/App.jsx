@@ -34,7 +34,8 @@ import {
   Clock,
   Zap,
   Brain,
-  CalendarX
+  CalendarX,
+  LogOut
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -45,8 +46,9 @@ import {
   downloadJournalData, 
   importJournalDataFromFile 
 } from './utils/storage';
-import { isSupabaseConfigured, getCurrentUser } from './utils/supabase.js';
+import { isSupabaseConfigured, getCurrentUser, signOut } from './utils/supabase.js';
 import { Auth } from './components/Auth';
+import { MigrationPrompt } from './components/MigrationPrompt';
 
 // --- DEFINICIÓN DE TEMAS ---
 const THEMES = {
@@ -806,6 +808,22 @@ export default function TradingJournalApp() {
     }
   };
 
+  const handleSignOut = async () => {
+    if (!isSupabaseConfigured()) {
+      return;
+    }
+
+    const { error } = await signOut();
+    if (!error) {
+      setUser(null);
+      setShowSettings(false);
+      console.log('User signed out successfully');
+    } else {
+      console.error('Error signing out:', error);
+      alert('Error al cerrar sesión. Por favor, intenta de nuevo.');
+    }
+  };
+
   // Check authentication status on mount
   useEffect(() => {
     const checkAuth = async () => {
@@ -1104,19 +1122,58 @@ export default function TradingJournalApp() {
     setIsFirstTime(false);
   };
 
-  // --- Load data from localStorage on mount ---
+  // --- Load data from Supabase (when authenticated) or localStorage ---
   useEffect(() => {
-    const data = loadJournalData();
-    if (data) {
-      if (data.entries) setEntries(data.entries);
-      if (data.availablePairs) setAvailablePairs(data.availablePairs);
-      if (data.motivationalImages) setMotivationalImages(data.motivationalImages);
-      if (data.appTitle) setAppTitle(data.appTitle);
-      if (data.accountBalance !== undefined) setAccountBalance(data.accountBalance);
-      if (data.currentTheme) setCurrentTheme(data.currentTheme);
-      if (data.initialized) setIsFirstTime(false);
+    const loadData = async () => {
+      try {
+        console.log('Loading journal data...', { user: user?.email, isSupabaseConfigured: isSupabaseConfigured() });
+        const data = await loadJournalData();
+        console.log('Loaded journal data:', { 
+          hasData: !!data, 
+          entriesCount: data?.entries?.length || 0,
+          pairsCount: data?.availablePairs?.length || 0,
+          imagesCount: data?.motivationalImages?.length || 0,
+          initialized: data?.initialized
+        });
+        
+        if (data) {
+          if (data.entries) setEntries(data.entries);
+          if (data.availablePairs) setAvailablePairs(data.availablePairs);
+          if (data.motivationalImages) setMotivationalImages(data.motivationalImages);
+          if (data.appTitle) setAppTitle(data.appTitle);
+          if (data.accountBalance !== undefined) setAccountBalance(data.accountBalance);
+          if (data.currentTheme) setCurrentTheme(data.currentTheme);
+          
+          // Set isFirstTime to false if:
+          // 1. initialized is explicitly true, OR
+          // 2. Any data exists (entries, pairs, images, or custom title/balance/theme)
+          const hasData = data.initialized === true || 
+            (data.entries && data.entries.length > 0) ||
+            (data.availablePairs && data.availablePairs.length > 0) ||
+            (data.motivationalImages && data.motivationalImages.length > 0) ||
+            (data.appTitle && data.appTitle !== 'ProTrader Journal') ||
+            (data.accountBalance !== undefined && data.accountBalance !== 0) ||
+            (data.currentTheme && data.currentTheme !== 'slate_blue');
+          
+          console.log('Data check:', { hasData, initialized: data.initialized });
+          
+          if (hasData) {
+            setIsFirstTime(false);
+            console.log('Set isFirstTime to false');
+          }
+        } else {
+          console.log('No data loaded - will show first-time setup');
+        }
+      } catch (error) {
+        console.error('Error loading journal data:', error);
+      }
+    };
+
+    // Only load if user is authenticated OR Supabase is not configured
+    if (!isSupabaseConfigured() || user) {
+      loadData();
     }
-  }, []); // Only run on mount
+  }, [user]); // Reload when user changes
 
   // --- Auto-save to localStorage when data changes (debounced) ---
   useEffect(() => {
@@ -1356,8 +1413,8 @@ export default function TradingJournalApp() {
       const result = await importJournalDataFromFile(file, merge);
       
       if (result.success) {
-        // Reload data from localStorage
-        const data = loadJournalData();
+        // Reload data from Supabase or localStorage
+        const data = await loadJournalData();
         if (data) {
           if (data.entries) setEntries(data.entries);
           if (data.availablePairs) setAvailablePairs(data.availablePairs);
@@ -1532,7 +1589,35 @@ export default function TradingJournalApp() {
     return days;
   };
 
+  // Loading state check
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950">
+        <div className="text-slate-200">Loading...</div>
+      </div>
+    );
+  }
+
+  // Authentication check - show Auth component if Supabase is configured and user is not logged in
+  if (isSupabaseConfigured() && !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4">
+        <Auth onAuthChange={handleAuthChange} />
+      </div>
+    );
+  }
+
   return (
+    <>
+      {/* Migration Prompt - shows when user first signs in with local data */}
+      <MigrationPrompt 
+        user={user}
+        onMigrationComplete={() => {
+          // Reload data after migration
+          window.location.reload();
+        }}
+        onDismiss={() => {}}
+      />
     <div className={clsx("h-screen w-full", theme.bgMain, theme.textMain, "font-sans", theme.selection, "flex flex-col overflow-hidden transition-colors duration-500")}>
       {/* Welcome Modal */}
       {isFirstTime && (
@@ -1806,6 +1891,26 @@ export default function TradingJournalApp() {
                 </Button>
               </div>
             </div>
+            {isSupabaseConfigured() && user && (
+              <div className={`pt-4 border-t ${theme.borderSec}`}>
+                <label className={`text-xs uppercase tracking-wider ${theme.textSec} font-semibold mb-3 block flex items-center gap-2`}>
+                  <Settings size={14} /> Cuenta
+                </label>
+                <div className="mb-3">
+                  <p className={`text-sm ${theme.textMain} mb-2`}>
+                    Conectado como: <span className={`font-semibold ${theme.accentText}`}>{user.email}</span>
+                  </p>
+                </div>
+                <Button 
+                  variant="outline" 
+                  onClick={handleSignOut} 
+                  theme={theme} 
+                  className="w-full flex items-center justify-center gap-2"
+                >
+                  <LogOut size={18} /> Cerrar Sesión
+                </Button>
+              </div>
+            )}
             <div className={`pt-4 border-t ${theme.borderSec}`}>
               <label className={`text-xs uppercase tracking-wider ${theme.textSec} font-semibold mb-3 block flex items-center gap-2`}><AlertTriangle size={14} className="text-rose-500" /> Zona de Peligro</label>
               <Button variant="danger" onClick={handleResetData} theme={theme} className="w-full flex items-center justify-center gap-2">
@@ -2786,5 +2891,6 @@ export default function TradingJournalApp() {
         </div>
       </main>
     </div>
+    </>
   );
 }
