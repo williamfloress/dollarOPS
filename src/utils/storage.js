@@ -1,9 +1,16 @@
 /**
- * Centralized localStorage utility for journal data persistence
- * Handles all data storage, retrieval, export, and import operations
+ * Centralized storage utility with Supabase integration and localStorage fallback
+ * Automatically falls back to localStorage if Supabase is unavailable
  */
 
-// Storage keys
+import { 
+  isSupabaseConfigured, 
+  getCurrentUser, 
+  loadJournalDataFromSupabase, 
+  saveJournalDataToSupabase 
+} from './supabase.js';
+
+// Storage keys (keep existing)
 const STORAGE_KEYS = {
   ENTRIES: 'journal_entries_v1',
   PAIRS: 'journal_pairs_v1',
@@ -15,11 +22,30 @@ const STORAGE_KEYS = {
 };
 
 /**
- * Save all journal data to localStorage
- * @param {Object} data - Journal data object
- * @returns {boolean} Success status
+ * Determine if we should use Supabase or localStorage
+ * @returns {Promise<{useSupabase: boolean, userId: string|null}>}
  */
-export const saveJournalData = (data) => {
+const getStorageMode = async () => {
+  if (!isSupabaseConfigured()) {
+    return { useSupabase: false, userId: null };
+  }
+
+  try {
+    const { user, error } = await getCurrentUser();
+    if (error || !user) {
+      return { useSupabase: false, userId: null };
+    }
+    return { useSupabase: true, userId: user.id };
+  } catch (error) {
+    console.warn('Error checking Supabase auth, falling back to localStorage:', error);
+    return { useSupabase: false, userId: null };
+  }
+};
+
+/**
+ * Save to localStorage (internal helper)
+ */
+const saveJournalDataToLocalStorage = (data) => {
   try {
     if (data.entries !== undefined) {
       localStorage.setItem(STORAGE_KEYS.ENTRIES, JSON.stringify(data.entries));
@@ -44,16 +70,15 @@ export const saveJournalData = (data) => {
     }
     return true;
   } catch (error) {
-    console.error('Error saving journal data to localStorage:', error);
+    console.error('Error saving to localStorage:', error);
     return false;
   }
 };
 
 /**
- * Load all journal data from localStorage
- * @returns {Object|null} Journal data object or null if not found
+ * Load from localStorage (internal helper)
  */
-export const loadJournalData = () => {
+const loadJournalDataFromLocalStorage = () => {
   try {
     const entries = localStorage.getItem(STORAGE_KEYS.ENTRIES);
     const pairs = localStorage.getItem(STORAGE_KEYS.PAIRS);
@@ -87,15 +112,75 @@ export const loadJournalData = () => {
       data.initialized = initialized === 'true';
     }
 
-    // Return null if no data found
     if (Object.keys(data).length === 0) {
       return null;
     }
 
     return data;
   } catch (error) {
-    console.error('Error loading journal data from localStorage:', error);
+    console.error('Error loading from localStorage:', error);
     return null;
+  }
+};
+
+/**
+ * Save all journal data (with Supabase fallback to localStorage)
+ * @param {Object} data - Journal data object
+ * @returns {Promise<boolean>} Success status
+ */
+export const saveJournalData = async (data) => {
+  try {
+    const { useSupabase, userId } = await getStorageMode();
+
+    if (useSupabase && userId) {
+      // Try Supabase first
+      const { success, error } = await saveJournalDataToSupabase(userId, data);
+      if (success) {
+        // Also save to localStorage as backup
+        saveJournalDataToLocalStorage(data);
+        return true;
+      } else {
+        console.warn('Supabase save failed, falling back to localStorage:', error);
+        // Fall through to localStorage
+      }
+    }
+
+    // Fallback to localStorage
+    return saveJournalDataToLocalStorage(data);
+  } catch (error) {
+    console.error('Error saving journal data:', error);
+    // Final fallback to localStorage
+    return saveJournalDataToLocalStorage(data);
+  }
+};
+
+/**
+ * Load all journal data (with Supabase fallback to localStorage)
+ * @returns {Promise<Object|null>} Journal data object or null if not found
+ */
+export const loadJournalData = async () => {
+  try {
+    const { useSupabase, userId } = await getStorageMode();
+
+    if (useSupabase && userId) {
+      // Try Supabase first
+      const { data, error } = await loadJournalDataFromSupabase(userId);
+      if (data && !error) {
+        // Also sync to localStorage as backup
+        saveJournalDataToLocalStorage(data);
+        return data;
+      } else {
+        console.warn('Supabase load failed, falling back to localStorage:', error);
+        // Fall through to localStorage
+      }
+    }
+
+    // Fallback to localStorage
+    return loadJournalDataFromLocalStorage();
+  } catch (error) {
+    console.error('Error loading journal data:', error);
+    // Final fallback to localStorage
+    return loadJournalDataFromLocalStorage();
   }
 };
 
@@ -116,11 +201,12 @@ export const clearJournalData = () => {
 
 /**
  * Export all journal data as JSON string
+ * Uses localStorage only for synchronous operation
  * @returns {string} JSON string of journal data
  */
 export const exportJournalData = () => {
   try {
-    const data = loadJournalData();
+    const data = loadJournalDataFromLocalStorage();
     if (!data) {
       return null;
     }
@@ -261,7 +347,7 @@ export const importJournalData = (jsonString, merge = false) => {
 
     // If merge mode, load existing data and merge
     if (merge) {
-      const existingData = loadJournalData() || {};
+      const existingData = loadJournalDataFromLocalStorage() || {};
       // Merge arrays by combining unique items
       if (data.entries && existingData.entries) {
         const existingIds = new Set(existingData.entries.map(e => e.id));
@@ -285,8 +371,12 @@ export const importJournalData = (jsonString, merge = false) => {
       }
     }
 
-    // Save imported data
-    const saveSuccess = saveJournalData(data);
+    // Save imported data (use async saveJournalData for Supabase sync, but also save to localStorage immediately)
+    const saveSuccess = saveJournalDataToLocalStorage(data);
+    // Also try to save to Supabase if available (fire and forget)
+    saveJournalData(data).catch(err => {
+      console.warn('Failed to sync imported data to Supabase:', err);
+    });
     
     return {
       success: saveSuccess,
