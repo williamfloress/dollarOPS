@@ -398,60 +398,13 @@ export const saveJournalDataToSupabase = async (userId, journalData) => {
     if (errors.length > 0) {
       return { 
         success: false, 
-        error: new Error(`Migration completed with errors: ${errors.join('; ')}`) 
+        error: new Error(`Save completed with errors: ${errors.join('; ')}`) 
       };
     }
 
     return { success: true, error: null };
   } catch (error) {
     console.error('Error saving journal data to Supabase:', error);
-    return { success: false, error };
-  }
-};
-
-/**
- * Migrate localStorage data to Supabase
- * @param {string} userId - User ID
- * @returns {Promise<{success: boolean, error: Error|null}>}
- */
-export const migrateLocalStorageToSupabase = async (userId) => {
-  if (!supabaseClient || !userId) {
-    return { success: false, error: new Error('Supabase not configured or no user ID') };
-  }
-
-  try {
-    // Import loadJournalDataFromLocalStorage to directly load from localStorage
-    // This bypasses the smart loader which would try Supabase first
-    const { loadJournalDataFromLocalStorage } = await import('./storage.js');
-    const localData = loadJournalDataFromLocalStorage();
-
-    if (!localData) {
-      return { success: false, error: new Error('No localStorage data to migrate') };
-    }
-
-    // Log what we're migrating for debugging
-    console.log('Migrating localStorage data to Supabase:', {
-      entriesCount: localData.entries?.length || 0,
-      pairsCount: localData.availablePairs?.length || 0,
-      imagesCount: localData.motivationalImages?.length || 0,
-      hasTitle: !!localData.appTitle,
-      hasBalance: localData.accountBalance !== undefined,
-      hasTheme: !!localData.currentTheme,
-      initialized: localData.initialized
-    });
-
-    // Save to Supabase
-    const result = await saveJournalDataToSupabase(userId, localData);
-    
-    if (result.success) {
-      console.log('Migration successful - data saved to Supabase');
-    } else {
-      console.error('Migration failed:', result.error);
-    }
-    
-    return result;
-  } catch (error) {
-    console.error('Error migrating localStorage to Supabase:', error);
     return { success: false, error };
   }
 };

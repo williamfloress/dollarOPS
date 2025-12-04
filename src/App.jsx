@@ -48,7 +48,6 @@ import {
 } from './utils/storage';
 import { isSupabaseConfigured, getCurrentUser, signOut } from './utils/supabase.js';
 import { Auth } from './components/Auth';
-import { MigrationPrompt } from './components/MigrationPrompt';
 
 // --- DEFINICIÓN DE TEMAS ---
 const THEMES = {
@@ -1609,15 +1608,6 @@ export default function TradingJournalApp() {
 
   return (
     <>
-      {/* Migration Prompt - shows when user first signs in with local data */}
-      <MigrationPrompt 
-        user={user}
-        onMigrationComplete={() => {
-          // Reload data after migration
-          window.location.reload();
-        }}
-        onDismiss={() => {}}
-      />
     <div className={clsx("h-screen w-full", theme.bgMain, theme.textMain, "font-sans", theme.selection, "flex flex-col overflow-hidden transition-colors duration-500")}>
       {/* Welcome Modal */}
       {isFirstTime && (

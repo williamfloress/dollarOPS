@@ -77,7 +77,6 @@ const saveJournalDataToLocalStorage = (data) => {
 
 /**
  * Load from localStorage (internal helper)
- * Exported for migration purposes to bypass Supabase checks
  */
 export const loadJournalDataFromLocalStorage = () => {
   try {
