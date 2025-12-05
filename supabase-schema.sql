@@ -102,7 +102,8 @@ CREATE TABLE public.trading_pairs (
 CREATE TABLE public.motivational_images (
     id DECIMAL(20, 6) PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    image_data TEXT NOT NULL, -- Base64 encoded image data
+    image_url TEXT, -- URL to image in Supabase Storage bucket
+    image_data TEXT, -- Base64 encoded image data (deprecated, use image_url instead)
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
@@ -131,6 +132,7 @@ CREATE INDEX IF NOT EXISTS idx_trading_pairs_pair ON public.trading_pairs(pair);
 -- Motivational Images indexes
 CREATE INDEX IF NOT EXISTS idx_motivational_images_user_id ON public.motivational_images(user_id);
 CREATE INDEX IF NOT EXISTS idx_motivational_images_created_at ON public.motivational_images(created_at);
+CREATE INDEX IF NOT EXISTS idx_motivational_images_url ON public.motivational_images(image_url);
 
 -- ============================================
 -- STEP 5: Create trigger function for updated_at
@@ -304,7 +306,9 @@ COMMENT ON TABLE public.user_profiles IS 'Additional user profile information li
 COMMENT ON TABLE public.user_preferences IS 'User-specific application preferences (one-to-one with users)';
 COMMENT ON TABLE public.entries IS 'Journal entries: trading operations, thoughts, and day offs';
 COMMENT ON TABLE public.trading_pairs IS 'Available trading pairs per user';
-COMMENT ON TABLE public.motivational_images IS 'Motivational images for vision board (base64 encoded)';
+COMMENT ON TABLE public.motivational_images IS 'Motivational images for vision board (stored in Supabase Storage)';
+COMMENT ON COLUMN public.motivational_images.image_url IS 'URL to image in Supabase Storage bucket';
+COMMENT ON COLUMN public.motivational_images.image_data IS 'Base64 encoded image data (deprecated, use image_url instead)';
 
 COMMENT ON COLUMN public.entries.entry_type IS '''operation'' for trading entries, ''thought'' or ''dayoff'' for others';
 COMMENT ON COLUMN public.entries.pair IS 'Trading pair (e.g., EURUSD), NULL for non-trading entries';
@@ -318,6 +322,24 @@ COMMENT ON COLUMN public.entries.pnl IS 'Profit and Loss amount, NULL for non-tr
 -- UPDATE public.entries 
 -- SET entry_type = 'operation' 
 -- WHERE entry_type IS NULL;
+
+-- ============================================
+-- MIGRATION: Add image_url column to motivational_images (for existing databases)
+-- ============================================
+-- If you have an existing database with the motivational_images table,
+-- run this migration to add the image_url column:
+-- ALTER TABLE public.motivational_images 
+-- ADD COLUMN IF NOT EXISTS image_url TEXT;
+-- 
+-- CREATE INDEX IF NOT EXISTS idx_motivational_images_url 
+-- ON public.motivational_images(image_url);
+-- 
+-- COMMENT ON COLUMN public.motivational_images.image_url IS 'URL to image in Supabase Storage bucket';
+-- COMMENT ON COLUMN public.motivational_images.image_data IS 'Base64 encoded image data (deprecated, use image_url instead)';
+-- 
+-- -- Make image_data nullable if it was NOT NULL
+-- ALTER TABLE public.motivational_images 
+-- ALTER COLUMN image_data DROP NOT NULL;
 
 -- ============================================
 -- Verification Queries (optional - uncomment to run)
