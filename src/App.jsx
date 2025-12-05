@@ -44,8 +44,7 @@ import {
   loadJournalData, 
   clearJournalData, 
   downloadJournalData, 
-  importJournalDataFromFile,
-  STORAGE_KEYS
+  importJournalDataFromFile
 } from './utils/storage';
 import { 
   isSupabaseConfigured, 
@@ -500,7 +499,7 @@ function useStickyState(defaultValue, key) {
   return [value, setValue];
 }
 
-// Data persistence is handled via the storage utility module (localStorage-based)
+// Data persistence is handled via the storage utility module (Supabase-based)
 
 // --- Welcome Modal Component ---
 const WelcomeModal = ({ onComplete, defaultTheme }) => {
@@ -746,17 +745,8 @@ const WelcomeModal = ({ onComplete, defaultTheme }) => {
 // --- Componente Principal ---
 export default function TradingJournalApp() {
   // Check if it's the first time opening the app
-  // For Supabase users, this will be determined from Supabase data, not localStorage
-  const [isFirstTime, setIsFirstTime] = useState(() => {
-    // Only use localStorage check if Supabase is not configured
-    // For Supabase users, we'll check Supabase data after loading
-    if (!isSupabaseConfigured()) {
-      const initialized = window.localStorage.getItem('journal_initialized_v1');
-      return initialized === null;
-    }
-    // Default to true for Supabase users until we load their data
-    return true;
-  });
+  // For Supabase users, this will be determined from Supabase data
+  const [isFirstTime, setIsFirstTime] = useState(true);
   
   // Estado Global con Persistencia (sin datos hardcodeados)
   const [entries, setEntries] = useStickyState([], 'journal_entries_v1');
@@ -821,20 +811,8 @@ export default function TradingJournalApp() {
     setUser(newUser);
     if (newUser) {
       console.log('User signed in:', newUser.email);
-      // When user logs in with Supabase, clear localStorage data to prevent conflicts
-      // The app will use Supabase data exclusively
+      // Set loading state - don't set isFirstTime yet, wait for data to load
       if (isSupabaseConfigured()) {
-        console.log('Clearing localStorage data for Supabase user');
-        // Clear localStorage journal data (but keep remembered email)
-        const rememberedEmail = localStorage.getItem('remembered_email');
-        Object.values(STORAGE_KEYS).forEach(key => {
-          localStorage.removeItem(key);
-        });
-        // Restore remembered email
-        if (rememberedEmail) {
-          localStorage.setItem('remembered_email', rememberedEmail);
-        }
-        // Set loading state - don't set isFirstTime yet, wait for data to load
         setIsLoadingData(true);
       }
     } else {
@@ -860,18 +838,17 @@ export default function TradingJournalApp() {
   };
 
   // Helper function to save all journal data
-  // Security: Only saves when authenticated (if Supabase is configured)
-  // Falls back to localStorage only if Supabase is not configured
+  // Requires Supabase to be configured and user to be authenticated
   const saveAllJournalData = async (updates = {}) => {
     setIsSaving(true);
     try {
-      // Security check: If Supabase is configured, only save when authenticated
-      if (isSupabaseConfigured() && !user) {
-        console.warn('Cannot save: Supabase is configured but user is not authenticated');
+      // Security check: Only save when authenticated
+      if (!isSupabaseConfigured() || !user) {
+        console.warn('Cannot save: User must be authenticated');
         return;
       }
 
-      await saveJournalData({
+      const { success, error } = await saveJournalData({
         entries: updates.entries !== undefined ? updates.entries : entries,
         availablePairs: updates.availablePairs !== undefined ? updates.availablePairs : availablePairs,
         motivationalImages: updates.motivationalImages !== undefined ? updates.motivationalImages : motivationalImages,
@@ -880,6 +857,10 @@ export default function TradingJournalApp() {
         currentTheme: updates.currentTheme !== undefined ? updates.currentTheme : currentTheme,
         initialized: true
       });
+
+      if (!success && error) {
+        console.error('Error saving journal data:', error);
+      }
     } catch (error) {
       console.error('Error saving journal data:', error);
     } finally {
@@ -1169,7 +1150,7 @@ export default function TradingJournalApp() {
             loadedCount++;
           }
         } else {
-          // Fallback to base64 for localStorage users
+          // Fallback to base64 if upload fails
           const reader = new FileReader();
           reader.onload = (event) => {
             newImages.push({ 
@@ -1347,9 +1328,8 @@ export default function TradingJournalApp() {
     
     // Save initialized state immediately
     // For Supabase users, this will be saved to Supabase
-    // For localStorage-only users, save to localStorage
+    // Save to Supabase with initialized: true
     if (isSupabaseConfigured() && user) {
-      // Save to Supabase with initialized: true
       const dataToSave = {
         entries: [],
         availablePairs: preferences.pairs || [],
@@ -1360,13 +1340,10 @@ export default function TradingJournalApp() {
         initialized: true
       };
       await saveJournalData(dataToSave);
-    } else {
-      // localStorage-only: save to localStorage
-      window.localStorage.setItem('journal_initialized_v1', 'true');
     }
   };
 
-  // --- Load data from Supabase (when authenticated) or localStorage ---
+  // --- Load data from Supabase (when authenticated) ---
   useEffect(() => {
     const loadData = async () => {
       // Set loading state when starting to load data for authenticated users
@@ -1376,7 +1353,17 @@ export default function TradingJournalApp() {
       
       try {
         console.log('Loading journal data...', { user: user?.email, isSupabaseConfigured: isSupabaseConfigured() });
-        const data = await loadJournalData();
+        const { data, error } = await loadJournalData();
+        
+        if (error) {
+          console.error('Error loading journal data:', error);
+          // If user is authenticated but data load fails, show error
+          if (isSupabaseConfigured() && user) {
+            alert('Error al cargar los datos. Por favor, recarga la página.');
+            setIsLoadingData(false);
+            return;
+          }
+        }
         console.log('Loaded journal data:', { 
           hasData: !!data, 
           entriesCount: data?.entries?.length || 0,
@@ -1393,10 +1380,8 @@ export default function TradingJournalApp() {
           if (data.accountBalance !== undefined) setAccountBalance(data.accountBalance);
           if (data.currentTheme) setCurrentTheme(data.currentTheme);
           
-          // For Supabase users, use the initialized field from Supabase
-          // For localStorage-only users, check if any data exists
+          // Use initialized field from Supabase
           if (isSupabaseConfigured() && user) {
-            // Supabase user: use initialized field directly
             setIsFirstTime(data.initialized !== true);
             console.log('Supabase user - isFirstTime:', data.initialized !== true, 'initialized:', data.initialized);
             
@@ -1408,17 +1393,8 @@ export default function TradingJournalApp() {
               }, 1000);
             }
           } else {
-            // localStorage-only: check if any data exists
-            const hasData = data.initialized === true || 
-              (data.entries && data.entries.length > 0) ||
-              (data.availablePairs && data.availablePairs.length > 0) ||
-              (data.motivationalImages && data.motivationalImages.length > 0) ||
-              (data.appTitle && data.appTitle !== 'ProTrader Journal') ||
-              (data.accountBalance !== undefined && data.accountBalance !== 0) ||
-              (data.currentTheme && data.currentTheme !== 'slate_blue');
-            
-            console.log('localStorage user - hasData:', hasData);
-            setIsFirstTime(!hasData);
+            // If Supabase is not configured, show first-time setup
+            setIsFirstTime(true);
           }
         } else {
           console.log('No data loaded - will show first-time setup');
@@ -1434,9 +1410,13 @@ export default function TradingJournalApp() {
       }
     };
 
-    // Only load if user is authenticated OR Supabase is not configured
-    if (!isSupabaseConfigured() || user) {
+    // Only load if user is authenticated
+    if (isSupabaseConfigured() && user) {
       loadData();
+    } else if (!isSupabaseConfigured()) {
+      // If Supabase is not configured, show first-time setup
+      setIsLoadingData(false);
+      setIsFirstTime(true);
     } else {
       // If Supabase is configured but no user, don't load data
       setIsLoadingData(false);
@@ -1456,10 +1436,7 @@ export default function TradingJournalApp() {
         accountBalance,
         currentTheme,
         // For Supabase users, initialized should be true if not first time
-        // For localStorage-only users, check localStorage
-        initialized: isSupabaseConfigured() && user 
-          ? true  // Supabase users: if not first time, always initialized
-          : window.localStorage.getItem('journal_initialized_v1') === 'true'
+        initialized: isSupabaseConfigured() && user ? true : false
       };
       saveJournalData(allData);
     }, 1000); // Save 1 second after last change
@@ -1658,8 +1635,8 @@ export default function TradingJournalApp() {
   };
 
   // Exportar JSON (all journal data)
-  const handleExportJSON = () => {
-    const success = downloadJournalData();
+  const handleExportJSON = async () => {
+    const success = await downloadJournalData();
     if (success) {
       alert('Datos exportados exitosamente en formato JSON');
     } else {
@@ -1685,7 +1662,7 @@ export default function TradingJournalApp() {
       const result = await importJournalDataFromFile(file, merge);
       
       if (result.success) {
-        // Reload data from Supabase or localStorage
+        // Reload data from Supabase
         const data = await loadJournalData();
         if (data) {
           if (data.entries) setEntries(data.entries);
@@ -1730,8 +1707,8 @@ export default function TradingJournalApp() {
   };
 
   const handleResetConfirm = async () => {
-    // Clear all localStorage data using utility
-    clearJournalData();
+    // Clear all Supabase data using utility
+    await clearJournalData();
     
     // Reset all state immediately
     setEntries([]);

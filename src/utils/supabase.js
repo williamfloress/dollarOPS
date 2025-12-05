@@ -239,6 +239,60 @@ export const signOut = async () => {
 };
 
 /**
+ * Request password reset email
+ * @param {string} email - User email
+ * @returns {Promise<{success: boolean, error: Error|null}>}
+ */
+export const requestPasswordReset = async (email) => {
+  if (!supabaseClient) {
+    return { success: false, error: new Error('Supabase not configured') };
+  }
+
+  try {
+    const redirectUrl = `${window.location.origin}${window.location.pathname}`;
+    
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+      redirectTo: redirectUrl,
+    });
+
+    if (error) {
+      return { success: false, error };
+    }
+
+    return { success: true, error: null };
+  } catch (error) {
+    console.error('Error requesting password reset:', error);
+    return { success: false, error };
+  }
+};
+
+/**
+ * Update user password (after password reset)
+ * @param {string} newPassword - New password
+ * @returns {Promise<{success: boolean, error: Error|null}>}
+ */
+export const updatePassword = async (newPassword) => {
+  if (!supabaseClient) {
+    return { success: false, error: new Error('Supabase not configured') };
+  }
+
+  try {
+    const { error } = await supabaseClient.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) {
+      return { success: false, error };
+    }
+
+    return { success: true, error: null };
+  } catch (error) {
+    console.error('Error updating password:', error);
+    return { success: false, error };
+  }
+};
+
+/**
  * Load all journal data from Supabase
  * @param {string} userId - User ID
  * @returns {Promise<{data: Object|null, error: Error|null}>}
@@ -293,7 +347,7 @@ export const loadJournalDataFromSupabase = async (userId) => {
       console.error('Error loading preferences:', prefsError);
     }
 
-    // Transform data to match localStorage format
+    // Transform data to match expected format
     const data = {
       entries: (entries || []).map(entry => ({
         id: entry.id,

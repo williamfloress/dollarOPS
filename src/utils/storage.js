@@ -1,6 +1,6 @@
 /**
- * Centralized storage utility with Supabase integration and localStorage fallback
- * Automatically falls back to localStorage if Supabase is unavailable
+ * Centralized storage utility with Supabase integration
+ * Requires Supabase to be configured and user to be authenticated
  */
 
 import { 
@@ -22,217 +22,128 @@ const STORAGE_KEYS = {
 };
 
 /**
- * Determine if we should use Supabase or localStorage
- * @returns {Promise<{useSupabase: boolean, userId: string|null}>}
+ * Get current user ID for Supabase storage
+ * @returns {Promise<{userId: string|null, error: Error|null}>}
  */
 export const getStorageMode = async () => {
   if (!isSupabaseConfigured()) {
-    return { useSupabase: false, userId: null };
+    return { userId: null, error: new Error('Supabase is not configured') };
   }
 
   try {
     const { user, error } = await getCurrentUser();
     if (error || !user) {
-      return { useSupabase: false, userId: null };
+      return { userId: null, error: error || new Error('User not authenticated') };
     }
-    return { useSupabase: true, userId: user.id };
+    return { userId: user.id, error: null };
   } catch (error) {
-    console.warn('Error checking Supabase auth, falling back to localStorage:', error);
-    return { useSupabase: false, userId: null };
+    return { userId: null, error };
   }
 };
 
-/**
- * Save to localStorage (internal helper)
- */
-const saveJournalDataToLocalStorage = (data) => {
-  try {
-    if (data.entries !== undefined) {
-      localStorage.setItem(STORAGE_KEYS.ENTRIES, JSON.stringify(data.entries));
-    }
-    if (data.availablePairs !== undefined) {
-      localStorage.setItem(STORAGE_KEYS.PAIRS, JSON.stringify(data.availablePairs));
-    }
-    if (data.motivationalImages !== undefined) {
-      localStorage.setItem(STORAGE_KEYS.IMAGES, JSON.stringify(data.motivationalImages));
-    }
-    if (data.appTitle !== undefined) {
-      localStorage.setItem(STORAGE_KEYS.TITLE, JSON.stringify(data.appTitle));
-    }
-    if (data.accountBalance !== undefined) {
-      localStorage.setItem(STORAGE_KEYS.BALANCE, JSON.stringify(data.accountBalance));
-    }
-    if (data.currentTheme !== undefined) {
-      localStorage.setItem(STORAGE_KEYS.THEME, JSON.stringify(data.currentTheme));
-    }
-    if (data.initialized !== undefined) {
-      localStorage.setItem(STORAGE_KEYS.INITIALIZED, data.initialized ? 'true' : 'false');
-    }
-    return true;
-  } catch (error) {
-    console.error('Error saving to localStorage:', error);
-    return false;
-  }
-};
 
 /**
- * Load from localStorage (internal helper)
- */
-export const loadJournalDataFromLocalStorage = () => {
-  try {
-    const entries = localStorage.getItem(STORAGE_KEYS.ENTRIES);
-    const pairs = localStorage.getItem(STORAGE_KEYS.PAIRS);
-    const images = localStorage.getItem(STORAGE_KEYS.IMAGES);
-    const title = localStorage.getItem(STORAGE_KEYS.TITLE);
-    const balance = localStorage.getItem(STORAGE_KEYS.BALANCE);
-    const theme = localStorage.getItem(STORAGE_KEYS.THEME);
-    const initialized = localStorage.getItem(STORAGE_KEYS.INITIALIZED);
-
-    const data = {};
-    
-    if (entries !== null) {
-      data.entries = JSON.parse(entries);
-    }
-    if (pairs !== null) {
-      data.availablePairs = JSON.parse(pairs);
-    }
-    if (images !== null) {
-      data.motivationalImages = JSON.parse(images);
-    }
-    if (title !== null) {
-      data.appTitle = JSON.parse(title);
-    }
-    if (balance !== null) {
-      data.accountBalance = JSON.parse(balance);
-    }
-    if (theme !== null) {
-      data.currentTheme = JSON.parse(theme);
-    }
-    if (initialized !== null) {
-      data.initialized = initialized === 'true';
-    }
-
-    if (Object.keys(data).length === 0) {
-      return null;
-    }
-
-    return data;
-  } catch (error) {
-    console.error('Error loading from localStorage:', error);
-    return null;
-  }
-};
-
-/**
- * Save all journal data (with Supabase fallback to localStorage)
+ * Save all journal data to Supabase
  * @param {Object} data - Journal data object
- * @returns {Promise<boolean>} Success status
+ * @returns {Promise<{success: boolean, error: Error|null}>} Success status
  */
 export const saveJournalData = async (data) => {
   try {
-    const { useSupabase, userId } = await getStorageMode();
+    const { userId, error: modeError } = await getStorageMode();
 
-    if (useSupabase && userId) {
-      // Try Supabase first
-      const { success, error } = await saveJournalDataToSupabase(userId, data);
-      if (success) {
-        // Also save to localStorage as backup
-        saveJournalDataToLocalStorage(data);
-        return true;
-      } else {
-        console.warn('Supabase save failed, falling back to localStorage:', error);
-        // Fall through to localStorage
-      }
+    if (modeError || !userId) {
+      return { success: false, error: modeError || new Error('User not authenticated') };
     }
 
-    // Fallback to localStorage
-    return saveJournalDataToLocalStorage(data);
+    const { success, error } = await saveJournalDataToSupabase(userId, data);
+    return { success, error };
   } catch (error) {
     console.error('Error saving journal data:', error);
-    // Final fallback to localStorage
-    return saveJournalDataToLocalStorage(data);
+    return { success: false, error };
   }
 };
 
 /**
- * Load all journal data (with Supabase fallback to localStorage)
- * @returns {Promise<Object|null>} Journal data object or null if not found
+ * Load all journal data from Supabase
+ * @returns {Promise<{data: Object|null, error: Error|null}>} Journal data object or error
  */
 export const loadJournalData = async () => {
   try {
-    const { useSupabase, userId } = await getStorageMode();
+    const { userId, error: modeError } = await getStorageMode();
 
-    if (useSupabase && userId) {
-      // When Supabase is configured and user is authenticated, ONLY use Supabase data
-      // Do NOT fall back to localStorage - this ensures new users see fresh data
-      const { data, error } = await loadJournalDataFromSupabase(userId);
-      if (data && !error) {
-        // Always use Supabase data, even if it's empty (for new users)
-        // Only sync to localStorage as backup if there's actual user data
-        const hasActualData = 
-          (data.entries && data.entries.length > 0) ||
-          (data.availablePairs && data.availablePairs.length > 0) ||
-          (data.motivationalImages && data.motivationalImages.length > 0) ||
-          (data.appTitle && data.appTitle !== 'ProTrader Journal') ||
-          (data.accountBalance !== undefined && data.accountBalance !== 0) ||
-          (data.currentTheme && data.currentTheme !== 'slate_blue') ||
-          data.initialized === true;
-        
-        if (hasActualData) {
-          // Sync to localStorage as backup only if user has actual data
-          saveJournalDataToLocalStorage(data);
-        }
-        // Always return Supabase data (even if empty for new users)
-        return data;
-      } else {
-        console.warn('Supabase load failed:', error);
-        // For authenticated Supabase users, return empty data structure instead of localStorage
-        // This ensures new users see first-time setup
-        return {
-          entries: [],
-          availablePairs: [],
-          motivationalImages: [],
-          appTitle: 'ProTrader Journal',
-          accountBalance: 0,
-          currentTheme: 'slate_blue',
-          initialized: false
-        };
-      }
+    if (modeError || !userId) {
+      return { 
+        data: null, 
+        error: modeError || new Error('User not authenticated') 
+      };
     }
 
-    // Fallback to localStorage
-    return loadJournalDataFromLocalStorage();
+    const { data, error } = await loadJournalDataFromSupabase(userId);
+    
+    if (error) {
+      return { data: null, error };
+    }
+
+    // Return Supabase data (even if empty for new users)
+    return { 
+      data: data || {
+        entries: [],
+        availablePairs: [],
+        motivationalImages: [],
+        appTitle: 'ProTrader Journal',
+        accountBalance: 0,
+        currentTheme: 'slate_blue',
+        initialized: false
+      }, 
+      error: null 
+    };
   } catch (error) {
     console.error('Error loading journal data:', error);
-    // Final fallback to localStorage
-    return loadJournalDataFromLocalStorage();
+    return { data: null, error };
   }
 };
 
 /**
- * Clear all journal data from localStorage
+ * Clear all journal data from Supabase
+ * @returns {Promise<{success: boolean, error: Error|null}>}
  */
-export const clearJournalData = () => {
+export const clearJournalData = async () => {
   try {
-    Object.values(STORAGE_KEYS).forEach(key => {
-      localStorage.removeItem(key);
-    });
-    return true;
+    const { userId, error: modeError } = await getStorageMode();
+
+    if (modeError || !userId) {
+      return { success: false, error: modeError || new Error('User not authenticated') };
+    }
+
+    // Clear all data by saving empty structure
+    const emptyData = {
+      entries: [],
+      availablePairs: [],
+      motivationalImages: [],
+      appTitle: 'ProTrader Journal',
+      accountBalance: 0,
+      currentTheme: 'slate_blue',
+      initialized: false
+    };
+
+    const { success, error } = await saveJournalDataToSupabase(userId, emptyData);
+    return { success, error };
   } catch (error) {
-    console.error('Error clearing journal data from localStorage:', error);
-    return false;
+    console.error('Error clearing journal data:', error);
+    return { success: false, error };
   }
 };
 
 /**
  * Export all journal data as JSON string
- * Uses localStorage only for synchronous operation
- * @returns {string} JSON string of journal data
+ * @returns {Promise<string|null>} JSON string of journal data
  */
-export const exportJournalData = () => {
+export const exportJournalData = async () => {
   try {
-    const data = loadJournalDataFromLocalStorage();
-    if (!data) {
+    const { data, error } = await loadJournalData();
+    
+    if (error || !data) {
+      console.error('Error loading data for export:', error);
       return null;
     }
     
@@ -252,9 +163,10 @@ export const exportJournalData = () => {
 
 /**
  * Download journal data as JSON file
+ * @returns {Promise<boolean>} Success status
  */
-export const downloadJournalData = () => {
-  const jsonData = exportJournalData();
+export const downloadJournalData = async () => {
+  const jsonData = await exportJournalData();
   if (!jsonData) {
     console.error('No data to export');
     return false;
@@ -351,9 +263,9 @@ const validateJournalSchema = (data) => {
  * Import journal data from JSON string with schema validation
  * @param {string} jsonString - JSON string to import
  * @param {boolean} merge - If true, merge with existing data; if false, replace
- * @returns {{success: boolean, data: Object|null, errors: string[]}} Import result
+ * @returns {Promise<{success: boolean, data: Object|null, errors: string[]}>} Import result
  */
-export const importJournalData = (jsonString, merge = false) => {
+export const importJournalData = async (jsonString, merge = false) => {
   try {
     const parsedData = JSON.parse(jsonString);
     
@@ -372,41 +284,39 @@ export const importJournalData = (jsonString, merge = false) => {
 
     // If merge mode, load existing data and merge
     if (merge) {
-      const existingData = loadJournalDataFromLocalStorage() || {};
-      // Merge arrays by combining unique items
-      if (data.entries && existingData.entries) {
-        const existingIds = new Set(existingData.entries.map(e => e.id));
-        const newEntries = data.entries.filter(e => !existingIds.has(e.id));
-        data.entries = [...existingData.entries, ...newEntries];
-      }
-      if (data.availablePairs && existingData.availablePairs) {
-        data.availablePairs = [...new Set([...existingData.availablePairs, ...data.availablePairs])];
-      }
-      if (data.motivationalImages && existingData.motivationalImages) {
-        data.motivationalImages = [...new Set([...existingData.motivationalImages, ...data.motivationalImages])];
-      }
-      // For other fields, prefer existing if both exist
-      if (existingData.appTitle && !data.appTitle) data.appTitle = existingData.appTitle;
-      if (existingData.accountBalance !== undefined && data.accountBalance === undefined) {
-        data.accountBalance = existingData.accountBalance;
-      }
-      if (existingData.currentTheme && !data.currentTheme) data.currentTheme = existingData.currentTheme;
-      if (existingData.initialized !== undefined && data.initialized === undefined) {
-        data.initialized = existingData.initialized;
+      const { data: existingData } = await loadJournalData();
+      if (existingData) {
+        // Merge arrays by combining unique items
+        if (data.entries && existingData.entries) {
+          const existingIds = new Set(existingData.entries.map(e => e.id));
+          const newEntries = data.entries.filter(e => !existingIds.has(e.id));
+          data.entries = [...existingData.entries, ...newEntries];
+        }
+        if (data.availablePairs && existingData.availablePairs) {
+          data.availablePairs = [...new Set([...existingData.availablePairs, ...data.availablePairs])];
+        }
+        if (data.motivationalImages && existingData.motivationalImages) {
+          data.motivationalImages = [...new Set([...existingData.motivationalImages, ...data.motivationalImages])];
+        }
+        // For other fields, prefer existing if both exist
+        if (existingData.appTitle && !data.appTitle) data.appTitle = existingData.appTitle;
+        if (existingData.accountBalance !== undefined && data.accountBalance === undefined) {
+          data.accountBalance = existingData.accountBalance;
+        }
+        if (existingData.currentTheme && !data.currentTheme) data.currentTheme = existingData.currentTheme;
+        if (existingData.initialized !== undefined && data.initialized === undefined) {
+          data.initialized = existingData.initialized;
+        }
       }
     }
 
-    // Save imported data (use async saveJournalData for Supabase sync, but also save to localStorage immediately)
-    const saveSuccess = saveJournalDataToLocalStorage(data);
-    // Also try to save to Supabase if available (fire and forget)
-    saveJournalData(data).catch(err => {
-      console.warn('Failed to sync imported data to Supabase:', err);
-    });
+    // Save imported data to Supabase
+    const { success, error } = await saveJournalData(data);
     
     return {
-      success: saveSuccess,
-      data: saveSuccess ? data : null,
-      errors: []
+      success,
+      data: success ? data : null,
+      errors: error ? [error.message] : []
     };
   } catch (error) {
     return {
@@ -452,6 +362,6 @@ export const importJournalDataFromFile = async (file, merge = false) => {
   });
 };
 
-// Export storage keys for direct access if needed
-export { STORAGE_KEYS };
+// Note: STORAGE_KEYS are no longer used but kept for reference
+// All data is now stored in Supabase only
 
