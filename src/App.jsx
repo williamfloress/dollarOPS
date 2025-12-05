@@ -847,6 +847,23 @@ export default function TradingJournalApp() {
     }
   };
 
+  // Helper function to save all journal data
+  const saveAllJournalData = async (updates = {}) => {
+    try {
+      await saveJournalData({
+        entries: updates.entries !== undefined ? updates.entries : entries,
+        availablePairs: updates.availablePairs !== undefined ? updates.availablePairs : availablePairs,
+        motivationalImages: updates.motivationalImages !== undefined ? updates.motivationalImages : motivationalImages,
+        appTitle: updates.appTitle !== undefined ? updates.appTitle : appTitle,
+        accountBalance: updates.accountBalance !== undefined ? updates.accountBalance : accountBalance,
+        currentTheme: updates.currentTheme !== undefined ? updates.currentTheme : currentTheme,
+        initialized: true
+      });
+    } catch (error) {
+      console.error('Error saving journal data:', error);
+    }
+  };
+
   // Check authentication status on mount
   useEffect(() => {
     const checkAuth = async () => {
@@ -927,34 +944,58 @@ export default function TradingJournalApp() {
   // Handlers
   const handleDayClick = (day) => setSelectedDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day));
   const handleBackToDashboard = () => setSelectedDate(null);
-  const handleAddEntry = (e) => {
+  const handleAddEntry = async (e) => {
     e.preventDefault();
     if (!formState.pair || !formState.pnl) return;
     const newEntry = { 
       id: Date.now(), date: selectedDate.toISOString(), pair: formState.pair.toUpperCase(), type: formState.type, 
       rr: formState.rr || '1:1', pnl: parseFloat(formState.pnl), notes: formState.notes, screenshotUrl: formState.screenshotUrl
     };
-    setEntries([...entries, newEntry]);
+    const updatedEntries = [...entries, newEntry];
+    setEntries(updatedEntries);
     setFormState({ pair: '', type: 'BUY', rr: '', pnl: '', notes: '', screenshotUrl: '' }); 
     setIsAddEntryModalOpen(false);
+    await saveAllJournalData({ entries: updatedEntries });
   };
-  const handleAddPair = () => {
+  const handleAddPair = async () => {
     if (newPairInput && !availablePairs.includes(newPairInput.toUpperCase())) {
-      setAvailablePairs([...availablePairs, newPairInput.toUpperCase()]);
+      const updatedPairs = [...availablePairs, newPairInput.toUpperCase()];
+      setAvailablePairs(updatedPairs);
       setNewPairInput('');
+      await saveAllJournalData({ availablePairs: updatedPairs });
     }
   };
   
-  const handleTogglePairFromModal = (pair) => {
+  const handleTogglePairFromModal = async (pair) => {
     const upperPair = pair.toUpperCase();
+    let updatedPairs;
     if (availablePairs.includes(upperPair)) {
-      setAvailablePairs(availablePairs.filter(p => p !== upperPair));
+      updatedPairs = availablePairs.filter(p => p !== upperPair);
     } else {
-      setAvailablePairs([...availablePairs, upperPair]);
+      updatedPairs = [...availablePairs, upperPair];
     }
+    setAvailablePairs(updatedPairs);
+    await saveAllJournalData({ availablePairs: updatedPairs });
   };
-  const handleRemovePair = (pair) => setAvailablePairs(availablePairs.filter(p => p !== pair));
-  const handleDeleteEntry = (id) => setEntries(entries.filter(e => e.id !== id));
+  const handleRemovePair = async (pair) => {
+    const updatedPairs = availablePairs.filter(p => p !== pair);
+    setAvailablePairs(updatedPairs);
+    await saveAllJournalData({ availablePairs: updatedPairs });
+  };
+  const handleDeleteEntry = async (id) => {
+    const updatedEntries = entries.filter(e => e.id !== id);
+    setEntries(updatedEntries);
+    await saveAllJournalData({ entries: updatedEntries });
+  };
+  
+  const handleTitleChange = (e) => {
+    setAppTitle(e.target.value);
+  };
+  
+  const handleTitleBlur = async () => {
+    setIsEditingTitle(false);
+    await saveAllJournalData({ appTitle });
+  };
   const handleViewEntry = (entry) => {
     // Safety check: only view trading entries (not thoughts or dayoff)
     if (entry.entryType === 'thought' || entry.entryType === 'dayoff') return;
@@ -976,7 +1017,7 @@ export default function TradingJournalApp() {
     setIsViewEntryModalOpen(false);
     setIsEditEntryModalOpen(true);
   };
-  const handleUpdateEntry = (e) => {
+  const handleUpdateEntry = async (e) => {
     e.preventDefault();
     if (!formState.pair || !formState.pnl || !editingEntry) return;
     const updatedEntry = {
@@ -988,10 +1029,12 @@ export default function TradingJournalApp() {
       notes: formState.notes,
       screenshotUrl: formState.screenshotUrl
     };
-    setEntries(entries.map(e => e.id === editingEntry.id ? updatedEntry : e));
+    const updatedEntries = entries.map(e => e.id === editingEntry.id ? updatedEntry : e);
+    setEntries(updatedEntries);
     setFormState({ pair: '', type: 'BUY', rr: '', pnl: '', notes: '', screenshotUrl: '' });
     setEditingEntry(null);
     setIsEditEntryModalOpen(false);
+    await saveAllJournalData({ entries: updatedEntries });
   };
   
   // Thought handlers
@@ -1066,18 +1109,37 @@ export default function TradingJournalApp() {
   // Drag & Drop
   const handleDragOver = (e) => { e.preventDefault(); setIsDragging(true); };
   const handleDragLeave = () => setIsDragging(false);
-  const handleDrop = (e) => {
+  const handleDrop = async (e) => {
     e.preventDefault(); setIsDragging(false);
     const files = Array.from(e.dataTransfer.files);
-    files.forEach(file => {
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (event) => setMotivationalImages(prev => [...prev, { id: Date.now() + Math.random(), src: event.target.result }]);
-        reader.readAsDataURL(file);
-      }
+    const imageFiles = files.filter(file => file.type.startsWith('image/'));
+    if (imageFiles.length === 0) return;
+    
+    const newImages = [];
+    let loadedCount = 0;
+    
+    imageFiles.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        newImages.push({ id: Date.now() + Math.random(), src: event.target.result });
+        loadedCount++;
+        
+        // When all images are loaded, update state and save
+        if (loadedCount === imageFiles.length) {
+          const updatedImages = [...motivationalImages, ...newImages];
+          setMotivationalImages(updatedImages);
+          await saveAllJournalData({ motivationalImages: updatedImages });
+        }
+      };
+      reader.readAsDataURL(file);
     });
   };
-  const handleDeleteImage = (id, e) => { e.stopPropagation(); setMotivationalImages(prev => prev.filter(img => img.id !== id)); };
+  const handleDeleteImage = async (id, e) => {
+    e.stopPropagation();
+    const updatedImages = motivationalImages.filter(img => img.id !== id);
+    setMotivationalImages(updatedImages);
+    await saveAllJournalData({ motivationalImages: updatedImages });
+  };
 
   // Slideshow handlers
   const toggleSlideshow = () => {
@@ -1670,7 +1732,7 @@ export default function TradingJournalApp() {
       {/* Header */}
       <header className={clsx("h-auto min-h-14 lg:min-h-20", theme.bgSec, "border-b", theme.borderSec, "px-3 lg:px-6 py-2 lg:py-0 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-2 lg:gap-0 shrink-0 z-20 relative shadow-md")}>
         <div className="flex items-center gap-2 lg:gap-4 w-full lg:w-auto">
-          <div className="flex-1 lg:flex-none min-w-0">{isEditingTitle ? (<Input value={appTitle} onChange={(e) => setAppTitle(e.target.value)} onBlur={() => setIsEditingTitle(false)} autoFocus theme={theme} />) : (<div className="flex items-center gap-2 cursor-pointer group" onClick={() => setIsEditingTitle(true)}><h1 className={clsx("text-base lg:text-xl font-bold truncate", theme.textMain, theme.accentText, "hover:opacity-80 transition-colors")}>{appTitle}</h1><Edit2 size={12} className={clsx(theme.textMuted, "opacity-0 group-hover:opacity-100 transition-opacity shrink-0")} /></div>)}</div>
+          <div className="flex-1 lg:flex-none min-w-0">{isEditingTitle ? (<Input value={appTitle} onChange={handleTitleChange} onBlur={handleTitleBlur} autoFocus theme={theme} />) : (<div className="flex items-center gap-2 cursor-pointer group" onClick={() => setIsEditingTitle(true)}><h1 className={clsx("text-base lg:text-xl font-bold truncate", theme.textMain, theme.accentText, "hover:opacity-80 transition-colors")}>{appTitle}</h1><Edit2 size={12} className={clsx(theme.textMuted, "opacity-0 group-hover:opacity-100 transition-opacity shrink-0")} /></div>)}</div>
           {/* Mobile/Tablet: Balance, VisionBoard, Metrics, Settings */}
           <div className="flex items-center gap-2 lg:hidden">
             {/* Total Balance */}
@@ -1960,11 +2022,13 @@ export default function TradingJournalApp() {
             </div>
             <Button 
               variant="primary" 
-              onClick={() => {
+              onClick={async () => {
                 // Save changes
-                setAccountBalance(typeof settingsBalance === 'number' ? settingsBalance : parseFloat(settingsBalance) || 0);
+                const newBalance = typeof settingsBalance === 'number' ? settingsBalance : parseFloat(settingsBalance) || 0;
+                setAccountBalance(newBalance);
                 setCurrentTheme(settingsTheme);
                 setShowSettings(false);
+                await saveAllJournalData({ accountBalance: newBalance, currentTheme: settingsTheme });
               }} 
               theme={theme} 
               className="w-full"
@@ -2216,12 +2280,14 @@ export default function TradingJournalApp() {
                 Descartar
               </Button>
               <Button 
-                onClick={() => {
+                onClick={async () => {
                   // Save changes and close
-                  setAccountBalance(typeof settingsBalance === 'number' ? settingsBalance : parseFloat(settingsBalance) || 0);
+                  const newBalance = typeof settingsBalance === 'number' ? settingsBalance : parseFloat(settingsBalance) || 0;
+                  setAccountBalance(newBalance);
                   setCurrentTheme(settingsTheme);
                   setShowSettingsCloseConfirm(false);
                   setShowSettings(false);
+                  await saveAllJournalData({ accountBalance: newBalance, currentTheme: settingsTheme });
                 }} 
                 theme={theme} 
                 className="flex-1"

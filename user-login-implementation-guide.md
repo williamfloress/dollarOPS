@@ -343,7 +343,7 @@ import { MigrationPrompt } from './components/MigrationPrompt';
 
 **Goal:** Create a reusable function to save all journal data.
 
-- [ ] **6.1** In `App.jsx`, add a helper function to save all journal data:
+- [x] **6.1** In `App.jsx`, add a helper function to save all journal data:
 
 ```javascript
 const saveAllJournalData = async () => {
@@ -363,7 +363,7 @@ const saveAllJournalData = async () => {
 };
 ```
 
-- [ ] **6.2** Verify `saveJournalData` is imported from `'./utils/storage'` (should already be imported)
+- [x] **6.2** Verify `saveJournalData` is imported from `'./utils/storage'` (should already be imported)
 
 **✅ Checkpoint 6 Complete:** Save helper function is ready to use.
 
@@ -373,8 +373,8 @@ const saveAllJournalData = async () => {
 
 **Goal:** Ensure all entry operations (add, delete, update) save to Supabase.
 
-- [ ] **7.1** Find `handleAddEntry` or similar function that adds entries
-- [ ] **7.2** Update it to be async and call `saveAllJournalData()`:
+- [x] **7.1** Find `handleAddEntry` or similar function that adds entries
+- [x] **7.2** Update it to be async and call `saveAllJournalData()`:
 
 ```javascript
 // Example: When adding a new entry
@@ -385,8 +385,8 @@ const handleAddEntry = async (newEntry) => {
 };
 ```
 
-- [ ] **7.3** Find function that deletes entries
-- [ ] **7.4** Update it to be async and call `saveAllJournalData()`:
+- [x] **7.3** Find function that deletes entries
+- [x] **7.4** Update it to be async and call `saveAllJournalData()`:
 
 ```javascript
 // Example: When deleting an entry
@@ -397,8 +397,8 @@ const handleDeleteEntry = async (id) => {
 };
 ```
 
-- [ ] **7.5** Find function that updates entries (if exists)
-- [ ] **7.6** Update it to be async and call `saveAllJournalData()`:
+- [x] **7.5** Find function that updates entries (if exists)
+- [x] **7.6** Update it to be async and call `saveAllJournalData()`:
 
 ```javascript
 // Example: When updating an entry
@@ -422,16 +422,16 @@ const handleUpdateEntry = async (updatedEntry) => {
 
 **Goal:** Ensure all settings changes (pairs, images, title, balance, theme) save to Supabase.
 
-- [ ] **8.1** Find function that adds/removes trading pairs
-- [ ] **8.2** Update it to call `saveAllJournalData()` after `setAvailablePairs`
-- [ ] **8.3** Find function that adds/deletes motivational images
-- [ ] **8.4** Update it to call `saveAllJournalData()` after `setMotivationalImages`
-- [ ] **8.5** Find function that updates app title
-- [ ] **8.6** Update it to call `saveAllJournalData()` after `setAppTitle`
-- [ ] **8.7** Find function that updates account balance
-- [ ] **8.8** Update it to call `saveAllJournalData()` after `setAccountBalance`
-- [ ] **8.9** Find function that changes theme
-- [ ] **8.10** Update it to call `saveAllJournalData()` after `setCurrentTheme`
+- [x] **8.1** Find function that adds/removes trading pairs
+- [x] **8.2** Update it to call `saveAllJournalData()` after `setAvailablePairs`
+- [x] **8.3** Find function that adds/deletes motivational images
+- [x] **8.4** Update it to call `saveAllJournalData()` after `setMotivationalImages`
+- [x] **8.5** Find function that updates app title
+- [x] **8.6** Update it to call `saveAllJournalData()` after `setAppTitle`
+- [x] **8.7** Find function that updates account balance
+- [x] **8.8** Update it to call `saveAllJournalData()` after `setAccountBalance`
+- [x] **8.9** Find function that changes theme
+- [x] **8.10** Update it to call `saveAllJournalData()` after `setCurrentTheme`
 - [ ] **8.11** Test: Change each setting and verify it saves to Supabase
 
 **✅ Checkpoint 8 Complete:** All settings operations save to Supabase.
