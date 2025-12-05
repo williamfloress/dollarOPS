@@ -52,11 +52,22 @@ export const Auth = ({ onAuthChange, theme }) => {
     const supabase = getSupabaseClient();
     if (!supabase) return;
 
-    // CRITICAL: Check for recovery token IMMEDIATELY before anything else
-    // This must happen synchronously to prevent Supabase from processing it first
+    // CRITICAL: Check for recovery token IMMEDIATELY and synchronously
+    // This must happen before Supabase processes the hash
+    // We need to check the hash BEFORE Supabase's onAuthStateChange fires
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
     const type = hashParams.get('type');
     const isRecoveryFlow = type === 'recovery';
+    
+    // If recovery token detected, set flag immediately to prevent any auto-login
+    if (isRecoveryFlow) {
+      console.log('🔐 Recovery token detected - setting recovery mode immediately');
+      setShowPasswordUpdate(true);
+      setUser(null);
+      if (onAuthChange) onAuthChange(null);
+      // Clear hash immediately to prevent Supabase from processing it
+      window.history.replaceState(null, '', window.location.pathname);
+    }
 
     // Set up auth state listener FIRST to catch any session creation
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -67,19 +78,21 @@ export const Auth = ({ onAuthChange, theme }) => {
       const currentType = currentHashParams.get('type');
       const isCurrentlyRecovery = currentType === 'recovery';
       
-      // If we're in recovery mode (either from URL or state)
+      // CRITICAL: If we're in recovery mode, prevent any auto-login
       if (isCurrentlyRecovery || showPasswordUpdate) {
-        console.log('🔐 Recovery: In recovery mode, showing password form');
+        console.log('🔐 Recovery: Preventing auto-login, keeping session for password update');
         
-        // IMPORTANT: Don't sign out the session yet - we need it to update the password!
+        // IMPORTANT: Don't sign out the session - we need it to update the password!
         // The session will be used by updatePassword() function
         // We just prevent showing the user as logged in
         
         // Ensure password update form is shown
         setShowPasswordUpdate(true);
         
-        // Don't set user state - keep it null so user doesn't appear logged in
-        // But keep the session active for password update
+        // CRITICAL: Don't set user state - keep it null so user doesn't appear logged in
+        // Don't call onAuthChange with user - this prevents the app from showing user data
+        setUser(null);
+        if (onAuthChange) onAuthChange(null);
         
         // Clear URL hash if not already cleared
         if (window.location.hash.includes('type=recovery')) {
@@ -93,27 +106,22 @@ export const Auth = ({ onAuthChange, theme }) => {
       if (onAuthChange) onAuthChange(session?.user || null);
     });
 
-    // Handle recovery flow
+    // Handle recovery flow - MUST be handled before Supabase processes the hash
     if (isRecoveryFlow) {
       console.log('🔐 Password recovery token detected in URL - setting up recovery flow');
       
       // Set state immediately to show password form
       setShowPasswordUpdate(true);
       
-      // IMPORTANT: Don't sign out the session - we need it to update the password!
-      // The recovery session is temporary and will be used by updatePassword()
-      // We just need to ensure the user state is null so they don't appear logged in
+      // CRITICAL: Set user to null immediately to prevent app from showing user data
       setUser(null);
       if (onAuthChange) onAuthChange(null);
       
-      // Clear URL hash after a short delay to allow session to be established
-      setTimeout(() => {
-        if (window.location.hash.includes('type=recovery')) {
-          window.history.replaceState(null, '', window.location.pathname);
-        }
-      }, 100);
+      // Clear URL hash immediately to prevent Supabase from processing it
+      window.history.replaceState(null, '', window.location.pathname);
       
       // Don't check user or load remembered email in recovery mode
+      // The auth state listener will handle the session when it's created
       return () => {
         subscription.unsubscribe();
       };
@@ -339,6 +347,9 @@ export const Auth = ({ onAuthChange, theme }) => {
       showPasswordUpdate,
       user: user ? 'exists' : 'null'
     });
+    
+    // CRITICAL: Even if user exists (from recovery session), don't show user as logged in
+    // The recovery session is temporary and only for password update
     return (
       <div className={`p-4 ${themeColors.bgCard} rounded-lg max-w-md mx-auto`}>
         <h2 className={`text-xl font-bold ${themeColors.textMain} mb-4`}>

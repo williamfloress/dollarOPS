@@ -808,17 +808,39 @@ export default function TradingJournalApp() {
 
   // Auth change handler
   const handleAuthChange = (newUser) => {
+    const previousUser = user;
     setUser(newUser);
+    
     if (newUser) {
       console.log('User signed in:', newUser.email);
+      
+      // CRITICAL: If user changed, clear all data immediately to prevent showing old user's data
+      if (previousUser && previousUser.id !== newUser.id) {
+        console.log('User changed - clearing previous user data');
+        clearUserData();
+      }
+      
       // Set loading state - don't set isFirstTime yet, wait for data to load
       if (isSupabaseConfigured()) {
         setIsLoadingData(true);
       }
     } else {
       console.log('User signed out');
+      // CRITICAL: Clear all data when user signs out
+      clearUserData();
       setIsLoadingData(false);
     }
+  };
+
+  // Helper function to clear all user data from state
+  const clearUserData = () => {
+    setEntries([]);
+    setAvailablePairs([]);
+    setMotivationalImages([]);
+    setAppTitle('ProTrader Journal');
+    setAccountBalance(0);
+    setCurrentTheme('slate_blue');
+    setIsFirstTime(true);
   };
 
   const handleSignOut = async () => {
@@ -1346,9 +1368,17 @@ export default function TradingJournalApp() {
   // --- Load data from Supabase (when authenticated) ---
   useEffect(() => {
     const loadData = async () => {
-      // Set loading state when starting to load data for authenticated users
+      // CRITICAL: Clear data immediately when starting to load for a new user
+      // This prevents showing old user's data while loading
       if (isSupabaseConfigured() && user) {
         setIsLoadingData(true);
+        // Clear data immediately to prevent showing stale data
+        setEntries([]);
+        setAvailablePairs([]);
+        setMotivationalImages([]);
+        setAppTitle('ProTrader Journal');
+        setAccountBalance(0);
+        setCurrentTheme('slate_blue');
       }
       
       try {
@@ -1838,7 +1868,7 @@ export default function TradingJournalApp() {
     return days;
   };
 
-  // Loading state check
+  // Loading state check - show loading while checking authentication
   if (isCheckingAuth) {
     return (
       <div className={`min-h-screen flex items-center justify-center ${THEMES[currentTheme].colors.bgMain}`}>
@@ -1855,6 +1885,28 @@ export default function TradingJournalApp() {
     return (
       <div className={`min-h-screen flex items-center justify-center ${THEMES[currentTheme].colors.bgMain} p-4`}>
         <Auth onAuthChange={handleAuthChange} theme={THEMES[currentTheme]} />
+      </div>
+    );
+  }
+
+  // Loading state check - show loading screen while data is being loaded
+  if (isLoadingData) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${THEMES[currentTheme].colors.bgMain}`}>
+        <div className="text-center">
+          <div className="relative">
+            {/* Main spinner */}
+            <div className={`animate-spin rounded-full h-16 w-16 border-4 ${THEMES[currentTheme].colors.border} border-t-4 ${THEMES[currentTheme].colors.accentBorder} mx-auto mb-6`}></div>
+            {/* Pulsing ring effect */}
+            <div className={`absolute inset-0 rounded-full border-4 ${THEMES[currentTheme].colors.accentBorder} opacity-20 animate-ping`}></div>
+          </div>
+          <h2 className={`text-xl font-semibold ${THEMES[currentTheme].colors.textMain} mb-2`}>
+            Cargando tu diario...
+          </h2>
+          <p className={`text-sm ${THEMES[currentTheme].colors.textSec}`}>
+            Por favor espera mientras cargamos tus datos
+          </p>
+        </div>
       </div>
     );
   }
