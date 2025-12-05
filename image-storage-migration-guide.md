@@ -479,11 +479,11 @@ const handleDrop = async (e) => {
 
 ### Step 4.5: Verify Upload Handler Updated
 
-- [ ] Imports updated with storage functions
-- [ ] `handleImageUpload` uses Supabase Storage for authenticated users
-- [ ] Base64 fallback for localStorage users
-- [ ] `handleDeleteImage` deletes from storage
-- [ ] `handleDrop` uses new upload handler
+- [x] Imports updated with storage functions
+- [x] `handleImageUpload` uses Supabase Storage for authenticated users
+- [x] Base64 fallback for localStorage users
+- [x] `handleDeleteImage` deletes from storage
+- [x] `handleDrop` uses new upload handler
 
 **✅ Checkpoint 4 Complete:** Image upload/delete handlers updated.
 
@@ -799,7 +799,7 @@ COMMENT ON TABLE public.motivational_images IS 'Motivational images for vision b
 - [x] **Checkpoint 1:** Storage bucket created and configured
 - [x] **Checkpoint 2:** Database schema updated
 - [x] **Checkpoint 3:** Storage functions added to `supabase.js`
-- [ ] **Checkpoint 4:** Image upload handler updated
+- [x] **Checkpoint 4:** Image upload handler updated
 - [ ] **Checkpoint 5:** Data loading/saving updated
 - [ ] **Checkpoint 6:** Migration logic implemented
 - [ ] **Checkpoint 7:** Image display verified

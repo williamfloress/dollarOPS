@@ -47,7 +47,15 @@ import {
   importJournalDataFromFile,
   STORAGE_KEYS
 } from './utils/storage';
-import { isSupabaseConfigured, getCurrentUser, signOut } from './utils/supabase.js';
+import { 
+  isSupabaseConfigured, 
+  getCurrentUser, 
+  signOut,
+  uploadImageToStorage,
+  deleteImageFromStorage,
+  migrateBase64ToStorage
+} from './utils/supabase.js';
+import { getStorageMode } from './utils/storage.js';
 import { Auth } from './components/Auth';
 
 // --- DEFINICIÓN DE TEMAS ---
@@ -1121,36 +1129,104 @@ export default function TradingJournalApp() {
   };
   const changeMonth = (offset) => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + offset)));
   
+  // Image Upload Handler
+  const handleImageUpload = async (files) => {
+    const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+    if (imageFiles.length === 0) return;
+    
+    const { useSupabase, userId } = await getStorageMode();
+    const newImages = [];
+    let loadedCount = 0;
+    
+    for (const file of imageFiles) {
+      try {
+        if (useSupabase && userId) {
+          // Upload to Supabase Storage
+          const { url, error } = await uploadImageToStorage(file, userId);
+          if (error) {
+            console.error('Error uploading image:', error);
+            // Fallback to base64 for this image
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              newImages.push({ 
+                id: Date.now() + Math.random(), 
+                src: event.target.result 
+              });
+              loadedCount++;
+              if (loadedCount === imageFiles.length) {
+                const updatedImages = [...motivationalImages, ...newImages];
+                setMotivationalImages(updatedImages);
+                saveAllJournalData({ motivationalImages: updatedImages });
+              }
+            };
+            reader.readAsDataURL(file);
+          } else {
+            // Successfully uploaded to storage
+            newImages.push({ 
+              id: Date.now() + Math.random(), 
+              src: url 
+            });
+            loadedCount++;
+          }
+        } else {
+          // Fallback to base64 for localStorage users
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            newImages.push({ 
+              id: Date.now() + Math.random(), 
+              src: event.target.result 
+            });
+            loadedCount++;
+          };
+          reader.readAsDataURL(file);
+        }
+      } catch (error) {
+        console.error('Error processing image:', error);
+        loadedCount++;
+      }
+    }
+    
+    // Wait for all images to process
+    const checkComplete = setInterval(() => {
+      if (loadedCount === imageFiles.length) {
+        clearInterval(checkComplete);
+        if (newImages.length > 0) {
+          const updatedImages = [...motivationalImages, ...newImages];
+          setMotivationalImages(updatedImages);
+          saveAllJournalData({ motivationalImages: updatedImages });
+        }
+      }
+    }, 100);
+  };
+
   // Drag & Drop
   const handleDragOver = (e) => { e.preventDefault(); setIsDragging(true); };
   const handleDragLeave = () => setIsDragging(false);
   const handleDrop = async (e) => {
-    e.preventDefault(); setIsDragging(false);
+    e.preventDefault();
+    setIsDragging(false);
     const files = Array.from(e.dataTransfer.files);
-    const imageFiles = files.filter(file => file.type.startsWith('image/'));
-    if (imageFiles.length === 0) return;
-    
-    const newImages = [];
-    let loadedCount = 0;
-    
-    imageFiles.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        newImages.push({ id: Date.now() + Math.random(), src: event.target.result });
-        loadedCount++;
-        
-        // When all images are loaded, update state and save
-        if (loadedCount === imageFiles.length) {
-          const updatedImages = [...motivationalImages, ...newImages];
-          setMotivationalImages(updatedImages);
-          await saveAllJournalData({ motivationalImages: updatedImages });
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+    await handleImageUpload(files);
   };
+  
   const handleDeleteImage = async (id, e) => {
     e.stopPropagation();
+    
+    const imageToDelete = motivationalImages.find(img => img.id === id);
+    if (!imageToDelete) return;
+    
+    const { useSupabase, userId } = await getStorageMode();
+    
+    // If image is stored in Supabase Storage, delete it
+    if (useSupabase && userId && imageToDelete.src && !imageToDelete.src.startsWith('data:')) {
+      const { error } = await deleteImageFromStorage(imageToDelete.src, userId);
+      if (error) {
+        console.error('Error deleting image from storage:', error);
+        // Continue with deletion from state even if storage delete fails
+      }
+    }
+    
+    // Remove from state
     const updatedImages = motivationalImages.filter(img => img.id !== id);
     setMotivationalImages(updatedImages);
     await saveAllJournalData({ motivationalImages: updatedImages });

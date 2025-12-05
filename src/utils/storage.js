@@ -25,7 +25,7 @@ const STORAGE_KEYS = {
  * Determine if we should use Supabase or localStorage
  * @returns {Promise<{useSupabase: boolean, userId: string|null}>}
  */
-const getStorageMode = async () => {
+export const getStorageMode = async () => {
   if (!isSupabaseConfigured()) {
     return { useSupabase: false, userId: null };
   }
