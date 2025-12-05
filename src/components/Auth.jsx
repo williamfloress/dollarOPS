@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { signIn, signUp, signOut, getCurrentUser, isSupabaseConfigured, getSupabaseClient, requestPasswordReset, updatePassword } from '../utils/supabase.js';
 
 /**
@@ -153,13 +153,6 @@ export const Auth = ({ onAuthChange, theme }) => {
       });
     }
 
-    // Load remembered email from localStorage (pre-authentication, so localStorage is appropriate)
-    const rememberedEmail = localStorage.getItem(REMEMBERED_EMAIL_KEY);
-    if (rememberedEmail) {
-      setEmail(rememberedEmail);
-      setRememberEmail(true);
-    }
-
     // Check user in normal flow
     checkUser();
 
@@ -168,6 +161,30 @@ export const Auth = ({ onAuthChange, theme }) => {
       subscription.unsubscribe();
     };
   }, [onAuthChange, showPasswordUpdate]);
+
+  // Load remembered email only once on mount (separate useEffect)
+  // Use a ref to track if we've already loaded the remembered email
+  const hasLoadedRememberedEmail = useRef(false);
+  const isUserTyping = useRef(false);
+  
+  useEffect(() => {
+    // Only load remembered email once on initial mount, before user starts typing
+    if (hasLoadedRememberedEmail.current || isUserTyping.current) return;
+    
+    const rememberedEmail = localStorage.getItem(REMEMBERED_EMAIL_KEY);
+    if (rememberedEmail) {
+      // Only set if email is empty to avoid overwriting user input
+      setEmail(rememberedEmail);
+      setRememberEmail(true);
+      hasLoadedRememberedEmail.current = true;
+    }
+  }, []); // Empty dependency array - only run once on mount
+  
+  // Track when user starts typing to prevent email from being overwritten
+  const handleEmailChange = (e) => {
+    isUserTyping.current = true;
+    setEmail(e.target.value);
+  };
 
   const checkUser = async () => {
     try {
@@ -473,7 +490,7 @@ export const Auth = ({ onAuthChange, theme }) => {
           <input
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={handleEmailChange}
             className={`w-full px-3 py-2 ${themeColors.bgInput} ${themeColors.textMain} rounded border ${themeColors.border}`}
             required
           />

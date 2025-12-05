@@ -501,6 +501,92 @@ function useStickyState(defaultValue, key) {
 
 // Data persistence is handled via the storage utility module (Supabase-based)
 
+// --- Loading Screen Component ---
+const LoadingScreen = ({ progress, message, theme }) => {
+  // Extract colors from theme object (theme can be THEMES[currentTheme] or theme.colors)
+  const colors = theme?.colors || theme;
+  
+  // Get color values for SVG (approximate Tailwind colors)
+  const getColorValue = (colorClass) => {
+    const colorMap = {
+      'border-slate-700': '#334155',
+      'border-blue-500': '#3b82f6',
+      'border-emerald-500': '#10b981',
+      'border-orange-500': '#f97316',
+      'border-purple-500': '#a855f7',
+      'border-rose-500': '#f43f5e',
+      'border-amber-500': '#f59e0b',
+      'border-neutral-300': '#d4d4d8',
+      'border-stone-300': '#d6d3d1',
+    };
+    return colorMap[colorClass] || '#3b82f6';
+  };
+
+  const borderColor = getColorValue(colors.border);
+  const accentColor = getColorValue(colors.accentBorder);
+
+  return (
+    <div className={`min-h-screen flex items-center justify-center ${colors.bgMain}`}>
+      <div className="text-center w-full max-w-md px-6">
+        <div className="relative mb-8">
+          {/* Main spinner with progress ring */}
+          <div className="relative w-24 h-24 mx-auto">
+            {/* Background circle */}
+            <svg className="w-24 h-24 transform -rotate-90" viewBox="0 0 100 100">
+              <circle
+                cx="50"
+                cy="50"
+                r="45"
+                stroke={borderColor}
+                strokeWidth="8"
+                fill="none"
+                opacity="0.2"
+              />
+              {/* Progress circle */}
+              <circle
+                cx="50"
+                cy="50"
+                r="45"
+                stroke={accentColor}
+                strokeWidth="8"
+                fill="none"
+                strokeDasharray={`${2 * Math.PI * 45}`}
+                strokeDashoffset={`${2 * Math.PI * 45 * (1 - progress / 100)}`}
+                strokeLinecap="round"
+                className="transition-all duration-300 ease-out"
+              />
+            </svg>
+            {/* Center spinner */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className={`animate-spin rounded-full h-12 w-12 border-4 ${colors.border} border-t-4 ${colors.accentBorder}`}></div>
+            </div>
+          </div>
+          {/* Pulsing ring effect */}
+          <div className={`absolute inset-0 rounded-full border-4 ${colors.accentBorder} opacity-10 animate-ping`}></div>
+        </div>
+        
+        {/* Progress bar */}
+        <div className={`w-full h-2 ${colors.bgSec} rounded-full overflow-hidden mb-6`}>
+          <div
+            className={`h-full ${colors.accentBg} transition-all duration-300 ease-out rounded-full`}
+            style={{ width: `${progress}%` }}
+          ></div>
+        </div>
+        
+        <h2 className={`text-2xl font-bold ${colors.textMain} mb-3`}>
+          Cargando tu diario...
+        </h2>
+        <p className={`text-base ${colors.textSec} mb-1 animate-pulse transition-all duration-300`}>
+          {message}
+        </p>
+        <p className={`text-sm ${colors.textMuted} mt-2`}>
+          {Math.round(progress)}%
+        </p>
+      </div>
+    </div>
+  );
+};
+
 // --- Welcome Modal Component ---
 const WelcomeModal = ({ onComplete, defaultTheme }) => {
   const [journalTitle, setJournalTitle] = useState('');
@@ -805,6 +891,9 @@ export default function TradingJournalApp() {
   const [isSaving, setIsSaving] = useState(false);
   // For Supabase users, start with loading true to prevent welcome modal flash
   const [isLoadingData, setIsLoadingData] = useState(() => isSupabaseConfigured());
+  // Loading state with progress and dynamic messages
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [loadingMessage, setLoadingMessage] = useState('Iniciando carga...');
 
   // Auth change handler
   const handleAuthChange = (newUser) => {
@@ -1372,6 +1461,8 @@ export default function TradingJournalApp() {
       // This prevents showing old user's data while loading
       if (isSupabaseConfigured() && user) {
         setIsLoadingData(true);
+        setLoadingProgress(0);
+        setLoadingMessage('Iniciando carga...');
         // Clear data immediately to prevent showing stale data
         setEntries([]);
         setAvailablePairs([]);
@@ -1383,6 +1474,23 @@ export default function TradingJournalApp() {
       
       try {
         console.log('Loading journal data...', { user: user?.email, isSupabaseConfigured: isSupabaseConfigured() });
+        
+        // Simulate loading steps with progress
+        setLoadingMessage('Conectando con el servidor...');
+        setLoadingProgress(10);
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        setLoadingMessage('Cargando datos de entradas...');
+        setLoadingProgress(25);
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        setLoadingMessage('Cargando preferencias de usuario...');
+        setLoadingProgress(50);
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        setLoadingMessage('Cargando métricas operacionales...');
+        setLoadingProgress(70);
+        
         const { data, error } = await loadJournalData();
         
         if (error) {
@@ -1394,6 +1502,10 @@ export default function TradingJournalApp() {
             return;
           }
         }
+        setLoadingMessage('Procesando datos...');
+        setLoadingProgress(85);
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
         console.log('Loaded journal data:', { 
           hasData: !!data, 
           entriesCount: data?.entries?.length || 0,
@@ -1403,6 +1515,14 @@ export default function TradingJournalApp() {
         });
         
         if (data) {
+          setLoadingMessage('Aplicando configuración...');
+          setLoadingProgress(90);
+          await new Promise(resolve => setTimeout(resolve, 150));
+          
+          setLoadingMessage('Finalizando...');
+          setLoadingProgress(100);
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
           if (data.entries) setEntries(data.entries);
           if (data.availablePairs) setAvailablePairs(data.availablePairs);
           if (data.motivationalImages) setMotivationalImages(data.motivationalImages);
@@ -1430,6 +1550,10 @@ export default function TradingJournalApp() {
           console.log('No data loaded - will show first-time setup');
           setIsFirstTime(true);
         }
+        
+        setLoadingMessage('Finalizando...');
+        setLoadingProgress(100);
+        await new Promise(resolve => setTimeout(resolve, 300));
       } catch (error) {
         console.error('Error loading journal data:', error);
         // On error, assume first time to be safe
@@ -1437,6 +1561,7 @@ export default function TradingJournalApp() {
       } finally {
         // Data loading is complete
         setIsLoadingData(false);
+        setLoadingProgress(0);
       }
     };
 
@@ -1871,12 +1996,11 @@ export default function TradingJournalApp() {
   // Loading state check - show loading while checking authentication
   if (isCheckingAuth) {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${THEMES[currentTheme].colors.bgMain}`}>
-        <div className="text-center">
-          <div className={`animate-spin rounded-full h-12 w-12 border-b-2 ${THEMES[currentTheme].colors.accentBorder} mx-auto mb-4`}></div>
-          <div className={THEMES[currentTheme].colors.textMain}>Loading...</div>
-        </div>
-      </div>
+      <LoadingScreen 
+        progress={50} 
+        message="Verificando autenticación..."
+        theme={THEMES[currentTheme]} 
+      />
     );
   }
 
@@ -1892,22 +2016,11 @@ export default function TradingJournalApp() {
   // Loading state check - show loading screen while data is being loaded
   if (isLoadingData) {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${THEMES[currentTheme].colors.bgMain}`}>
-        <div className="text-center">
-          <div className="relative">
-            {/* Main spinner */}
-            <div className={`animate-spin rounded-full h-16 w-16 border-4 ${THEMES[currentTheme].colors.border} border-t-4 ${THEMES[currentTheme].colors.accentBorder} mx-auto mb-6`}></div>
-            {/* Pulsing ring effect */}
-            <div className={`absolute inset-0 rounded-full border-4 ${THEMES[currentTheme].colors.accentBorder} opacity-20 animate-ping`}></div>
-          </div>
-          <h2 className={`text-xl font-semibold ${THEMES[currentTheme].colors.textMain} mb-2`}>
-            Cargando tu diario...
-          </h2>
-          <p className={`text-sm ${THEMES[currentTheme].colors.textSec}`}>
-            Por favor espera mientras cargamos tus datos
-          </p>
-        </div>
-      </div>
+      <LoadingScreen 
+        progress={loadingProgress} 
+        message={loadingMessage}
+        theme={THEMES[currentTheme]} 
+      />
     );
   }
 
