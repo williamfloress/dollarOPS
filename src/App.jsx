@@ -804,6 +804,9 @@ export default function TradingJournalApp() {
   // Authentication state
   const [user, setUser] = useState(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  // For Supabase users, start with loading true to prevent welcome modal flash
+  const [isLoadingData, setIsLoadingData] = useState(() => isSupabaseConfigured());
 
   // Auth change handler
   const handleAuthChange = (newUser) => {
@@ -823,11 +826,12 @@ export default function TradingJournalApp() {
         if (rememberedEmail) {
           localStorage.setItem('remembered_email', rememberedEmail);
         }
-        // Reset to first-time state until we load Supabase data
-        setIsFirstTime(true);
+        // Set loading state - don't set isFirstTime yet, wait for data to load
+        setIsLoadingData(true);
       }
     } else {
       console.log('User signed out');
+      setIsLoadingData(false);
     }
   };
 
@@ -848,8 +852,17 @@ export default function TradingJournalApp() {
   };
 
   // Helper function to save all journal data
+  // Security: Only saves when authenticated (if Supabase is configured)
+  // Falls back to localStorage only if Supabase is not configured
   const saveAllJournalData = async (updates = {}) => {
+    setIsSaving(true);
     try {
+      // Security check: If Supabase is configured, only save when authenticated
+      if (isSupabaseConfigured() && !user) {
+        console.warn('Cannot save: Supabase is configured but user is not authenticated');
+        return;
+      }
+
       await saveJournalData({
         entries: updates.entries !== undefined ? updates.entries : entries,
         availablePairs: updates.availablePairs !== undefined ? updates.availablePairs : availablePairs,
@@ -861,6 +874,8 @@ export default function TradingJournalApp() {
       });
     } catch (error) {
       console.error('Error saving journal data:', error);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1229,6 +1244,11 @@ export default function TradingJournalApp() {
   // --- Load data from Supabase (when authenticated) or localStorage ---
   useEffect(() => {
     const loadData = async () => {
+      // Set loading state when starting to load data for authenticated users
+      if (isSupabaseConfigured() && user) {
+        setIsLoadingData(true);
+      }
+      
       try {
         console.log('Loading journal data...', { user: user?.email, isSupabaseConfigured: isSupabaseConfigured() });
         const data = await loadJournalData();
@@ -1273,12 +1293,20 @@ export default function TradingJournalApp() {
         }
       } catch (error) {
         console.error('Error loading journal data:', error);
+        // On error, assume first time to be safe
+        setIsFirstTime(true);
+      } finally {
+        // Data loading is complete
+        setIsLoadingData(false);
       }
     };
 
     // Only load if user is authenticated OR Supabase is not configured
     if (!isSupabaseConfigured() || user) {
       loadData();
+    } else {
+      // If Supabase is configured but no user, don't load data
+      setIsLoadingData(false);
     }
   }, [user]); // Reload when user changes
 
@@ -1703,8 +1731,11 @@ export default function TradingJournalApp() {
   // Loading state check
   if (isCheckingAuth) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950">
-        <div className="text-slate-200">Loading...</div>
+      <div className={`min-h-screen flex items-center justify-center ${THEMES[currentTheme].colors.bgMain}`}>
+        <div className="text-center">
+          <div className={`animate-spin rounded-full h-12 w-12 border-b-2 ${THEMES[currentTheme].colors.accentBorder} mx-auto mb-4`}></div>
+          <div className={THEMES[currentTheme].colors.textMain}>Loading...</div>
+        </div>
       </div>
     );
   }
@@ -1712,8 +1743,8 @@ export default function TradingJournalApp() {
   // Authentication check - show Auth component if Supabase is configured and user is not logged in
   if (isSupabaseConfigured() && !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4">
-        <Auth onAuthChange={handleAuthChange} />
+      <div className={`min-h-screen flex items-center justify-center ${THEMES[currentTheme].colors.bgMain} p-4`}>
+        <Auth onAuthChange={handleAuthChange} theme={THEMES[currentTheme]} />
       </div>
     );
   }
@@ -1721,8 +1752,8 @@ export default function TradingJournalApp() {
   return (
     <>
     <div className={clsx("h-screen w-full", theme.bgMain, theme.textMain, "font-sans", theme.selection, "flex flex-col overflow-hidden transition-colors duration-500")}>
-      {/* Welcome Modal */}
-      {isFirstTime && (
+      {/* Welcome Modal - Only show if not loading data */}
+      {isFirstTime && !isLoadingData && (
         <WelcomeModal 
           onComplete={handleWelcomeComplete}
           defaultTheme={currentTheme}
@@ -1732,7 +1763,15 @@ export default function TradingJournalApp() {
       {/* Header */}
       <header className={clsx("h-auto min-h-14 lg:min-h-20", theme.bgSec, "border-b", theme.borderSec, "px-3 lg:px-6 py-2 lg:py-0 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-2 lg:gap-0 shrink-0 z-20 relative shadow-md")}>
         <div className="flex items-center gap-2 lg:gap-4 w-full lg:w-auto">
-          <div className="flex-1 lg:flex-none min-w-0">{isEditingTitle ? (<Input value={appTitle} onChange={handleTitleChange} onBlur={handleTitleBlur} autoFocus theme={theme} />) : (<div className="flex items-center gap-2 cursor-pointer group" onClick={() => setIsEditingTitle(true)}><h1 className={clsx("text-base lg:text-xl font-bold truncate", theme.textMain, theme.accentText, "hover:opacity-80 transition-colors")}>{appTitle}</h1><Edit2 size={12} className={clsx(theme.textMuted, "opacity-0 group-hover:opacity-100 transition-opacity shrink-0")} /></div>)}</div>
+          <div className="flex-1 lg:flex-none min-w-0 flex items-center gap-2">
+            {isEditingTitle ? (<Input value={appTitle} onChange={handleTitleChange} onBlur={handleTitleBlur} autoFocus theme={theme} />) : (<div className="flex items-center gap-2 cursor-pointer group" onClick={() => setIsEditingTitle(true)}><h1 className={clsx("text-base lg:text-xl font-bold truncate", theme.textMain, theme.accentText, "hover:opacity-80 transition-colors")}>{appTitle}</h1><Edit2 size={12} className={clsx(theme.textMuted, "opacity-0 group-hover:opacity-100 transition-opacity shrink-0")} /></div>)}
+            {isSaving && (
+              <div className="flex items-center gap-2 text-xs" title="Saving...">
+                <div className={`animate-spin rounded-full h-3 w-3 border-b-2 ${theme.accentBorder}`}></div>
+                <span className={theme.textSec}>Saving...</span>
+              </div>
+            )}
+          </div>
           {/* Mobile/Tablet: Balance, VisionBoard, Metrics, Settings */}
           <div className="flex items-center gap-2 lg:hidden">
             {/* Total Balance */}
@@ -1775,6 +1814,17 @@ export default function TradingJournalApp() {
             >
               <Settings size={20} />
             </button>
+            {/* Sign Out button - Mobile/Tablet */}
+            {isSupabaseConfigured() && user && (
+              <button
+                onClick={handleSignOut}
+                className={`p-2.5 ${theme.bgCard} rounded-lg border ${theme.border} text-red-400 hover:text-red-300 hover:${theme.bgSec} active:scale-95 transition-all`}
+                title="Cerrar Sesión"
+                aria-label="Cerrar Sesión"
+              >
+                <LogOut size={20} />
+              </button>
+            )}
           </div>
         </div>
         {/* Metrics - Hidden on mobile/tablet/laptop, shown on xl screens */}
@@ -1828,6 +1878,18 @@ export default function TradingJournalApp() {
             }} title="Configuración" theme={theme}>
               <Settings size={18} />
             </Button>
+            {isSupabaseConfigured() && user && (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={handleSignOut} 
+                title="Cerrar Sesión" 
+                theme={theme}
+                className="text-red-400 hover:text-red-300"
+              >
+                <LogOut size={18} />
+              </Button>
+            )}
           </div>
         </div>
       </header>

@@ -442,14 +442,14 @@ const handleUpdateEntry = async (updatedEntry) => {
 
 **Goal:** Add better loading indicators during authentication and data operations.
 
-- [ ] **9.1** Update loading state UI to match your app theme:
+- [x] **9.1** Update loading state UI to match your app theme:
 
 ```javascript
 if (isCheckingAuth) {
   return (
     <div className={`min-h-screen flex items-center justify-center ${THEMES[currentTheme].colors.bgMain}`}>
       <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+        <div className={`animate-spin rounded-full h-12 w-12 border-b-2 ${THEMES[currentTheme].colors.accentBorder} mx-auto mb-4`}></div>
         <div className={THEMES[currentTheme].colors.textMain}>Loading...</div>
       </div>
     </div>
@@ -457,7 +457,7 @@ if (isCheckingAuth) {
 }
 ```
 
-- [ ] **9.2** (Optional) Add loading state for save operations:
+- [x] **9.2** (Optional) Add loading state for save operations:
 
 ```javascript
 const [isSaving, setIsSaving] = useState(false);
@@ -472,7 +472,7 @@ const saveAllJournalData = async () => {
 };
 ```
 
-- [ ] **9.3** (Optional) Show saving indicator in UI when `isSaving` is true
+- [x] **9.3** (Optional) Show saving indicator in UI when `isSaving` is true
 
 **✅ Checkpoint 9 Complete:** Loading states are improved.
 
@@ -482,38 +482,40 @@ const saveAllJournalData = async () => {
 
 **Goal:** Make Auth component match your app's theme system.
 
-- [ ] **10.1** Open `src/components/Auth.jsx`
-- [ ] **10.2** Update component signature to accept theme prop:
+- [x] **10.1** Open `src/components/Auth.jsx`
+- [x] **10.2** Update component signature to accept theme prop:
 
 ```javascript
 export const Auth = ({ onAuthChange, theme }) => {
 ```
 
-- [ ] **10.3** Add theme fallback at the start of component:
+- [x] **10.3** Add theme fallback at the start of component:
 
 ```javascript
-const currentTheme = theme || {
-  colors: {
-    bgMain: 'bg-slate-950',
-    bgCard: 'bg-slate-800',
-    bgInput: 'bg-slate-900',
-    textMain: 'text-slate-200',
-    textSec: 'text-slate-400',
-    border: 'border-slate-700',
-    accentBg: 'bg-blue-600',
-    accentHover: 'hover:bg-blue-700',
-  }
+const themeColors = theme?.colors || {
+  bgMain: 'bg-slate-950',
+  bgCard: 'bg-slate-800',
+  bgInput: 'bg-slate-900',
+  textMain: 'text-slate-200',
+  textSec: 'text-slate-400',
+  textMuted: 'text-slate-500',
+  border: 'border-slate-700',
+  accentBg: 'bg-blue-600',
+  accentHover: 'hover:bg-blue-700',
+  accentText: 'text-blue-500',
+  accentBorder: 'border-blue-500',
+  accentRing: 'ring-blue-500',
 };
 ```
 
-- [ ] **10.4** Update all hardcoded className values to use `currentTheme.colors`
-- [ ] **10.5** In `App.jsx`, pass theme to Auth component:
+- [x] **10.4** Update all hardcoded className values to use `themeColors`
+- [x] **10.5** In `App.jsx`, pass theme to Auth component:
 
 ```javascript
 <Auth onAuthChange={handleAuthChange} theme={THEMES[currentTheme]} />
 ```
 
-- [ ] **10.6** Test: Auth component should match your app's theme
+- [x] **10.6** Test: Auth component should match your app's theme
 
 **✅ Checkpoint 10 Complete:** Auth component matches app theme.
 
@@ -523,32 +525,45 @@ const currentTheme = theme || {
 
 **Goal:** Allow users to sign out from the journal.
 
-- [ ] **11.1** Import `signOut` in `App.jsx`:
+- [x] **11.1** Import `signOut` in `App.jsx`:
 
 ```javascript
 import { signOut } from './utils/supabase.js';
 ```
 
-- [ ] **11.2** Create sign out handler:
+- [x] **11.2** Create sign out handler:
 
 ```javascript
 const handleSignOut = async () => {
+  if (!isSupabaseConfigured()) {
+    return;
+  }
+
   const { error } = await signOut();
   if (!error) {
     setUser(null);
+    setShowSettings(false);
+  } else {
+    console.error('Error signing out:', error);
+    alert('Error al cerrar sesión. Por favor, intenta de nuevo.');
   }
 };
 ```
 
-- [ ] **11.3** Add sign out button in your settings menu or header:
+- [x] **11.3** Add sign out button in your settings menu or header:
 
 ```javascript
-<button onClick={handleSignOut} className="...">
-  Sign Out
-</button>
+<Button 
+  variant="outline" 
+  onClick={handleSignOut} 
+  theme={theme} 
+  className="w-full flex items-center justify-center gap-2"
+>
+  <LogOut size={18} /> Cerrar Sesión
+</Button>
 ```
 
-- [ ] **11.4** Test: Click sign out, verify user is logged out and redirected to auth screen
+- [x] **11.4** Test: Click sign out, verify user is logged out and redirected to auth screen
 
 **✅ Checkpoint 11 Complete:** Sign out functionality is working.
 

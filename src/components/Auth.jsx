@@ -8,7 +8,23 @@ import { signIn, signUp, signOut, getCurrentUser, isSupabaseConfigured, getSupab
  */
 const REMEMBERED_EMAIL_KEY = 'remembered_email';
 
-export const Auth = ({ onAuthChange }) => {
+export const Auth = ({ onAuthChange, theme }) => {
+  // Theme fallback - use provided theme or default dark theme
+  // If theme is passed, it's the full theme object with colors property
+  const themeColors = theme?.colors || {
+    bgMain: 'bg-slate-950',
+    bgCard: 'bg-slate-800',
+    bgInput: 'bg-slate-900',
+    textMain: 'text-slate-200',
+    textSec: 'text-slate-400',
+    textMuted: 'text-slate-500',
+    border: 'border-slate-700',
+    accentBg: 'bg-blue-600',
+    accentHover: 'hover:bg-blue-700',
+    accentText: 'text-blue-500',
+    accentBorder: 'border-blue-500',
+    accentRing: 'ring-blue-500',
+  };
   const [user, setUser] = useState(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -167,12 +183,12 @@ export const Auth = ({ onAuthChange }) => {
 
   if (user) {
     return (
-      <div className="p-4 bg-slate-800 rounded-lg">
-        <p className="text-slate-200 mb-2">Signed in as: {user.email}</p>
+      <div className={`p-4 ${themeColors.bgCard} rounded-lg`}>
+        <p className={`${themeColors.textMain} mb-2`}>Signed in as: {user.email}</p>
         <button
           onClick={handleSignOut}
           disabled={loading}
-          className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+          className={`px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50`}
         >
           {loading ? 'Signing out...' : 'Sign Out'}
         </button>
@@ -183,18 +199,18 @@ export const Auth = ({ onAuthChange }) => {
   // Show verification pending page after sign up
   if (verificationPending) {
     return (
-      <div className="p-6 bg-slate-800 rounded-lg max-w-md mx-auto">
+      <div className={`p-6 ${themeColors.bgCard} rounded-lg max-w-md mx-auto`}>
         <div className="text-center mb-6">
-          <div className="mx-auto w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mb-4">
+          <div className={`mx-auto w-16 h-16 ${themeColors.accentBg} rounded-full flex items-center justify-center mb-4`}>
             <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
           </div>
-          <h2 className="text-2xl font-bold text-slate-200 mb-2">Check Your Email</h2>
-          <p className="text-slate-400 mb-4">
-            We've sent a verification email to <span className="font-semibold text-slate-200">{pendingEmail}</span>
+          <h2 className={`text-2xl font-bold ${themeColors.textMain} mb-2`}>Check Your Email</h2>
+          <p className={`${themeColors.textSec} mb-4`}>
+            We've sent a verification email to <span className={`font-semibold ${themeColors.textMain}`}>{pendingEmail}</span>
           </p>
-          <p className="text-sm text-slate-500 mb-6">
+          <p className={`text-sm ${themeColors.textMuted} mb-6`}>
             Please check your email and click on the verification link to activate your account. 
             After clicking the link, you'll be asked to sign in with your email and password.
           </p>
@@ -206,11 +222,11 @@ export const Auth = ({ onAuthChange }) => {
               setPendingEmail('');
               setIsSignUp(false);
             }}
-            className="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            className={`w-full px-4 py-2 ${themeColors.accentBg} text-white rounded ${themeColors.accentHover}`}
           >
             Back to Sign In
           </button>
-          <p className="text-xs text-center text-slate-500">
+          <p className={`text-xs text-center ${themeColors.textMuted}`}>
             Didn't receive the email? Check your spam folder or try signing up again.
           </p>
         </div>
@@ -219,14 +235,14 @@ export const Auth = ({ onAuthChange }) => {
   }
 
   return (
-    <div className="p-4 bg-slate-800 rounded-lg max-w-md mx-auto">
+    <div className={`p-4 ${themeColors.bgCard} rounded-lg max-w-md mx-auto`}>
       {showVerificationLogin && (
-        <div className="mb-4 p-3 bg-blue-900/50 border border-blue-700 rounded text-blue-200 text-sm">
+        <div className={`mb-4 p-3 ${themeColors.accentBg}/50 border ${themeColors.accentBorder} rounded ${themeColors.accentText} text-sm`}>
           <p className="font-semibold mb-1">Email Verified!</p>
           <p>Please sign in with your email and password to continue.</p>
         </div>
       )}
-      <h2 className="text-xl font-bold text-slate-200 mb-4">
+      <h2 className={`text-xl font-bold ${themeColors.textMain} mb-4`}>
         {isSignUp ? 'Sign Up' : 'Sign In'}
       </h2>
       
@@ -239,35 +255,35 @@ export const Auth = ({ onAuthChange }) => {
       <form onSubmit={handleSubmit} className="space-y-4">
         {isSignUp && (
           <div>
-            <label className="block text-slate-300 mb-1">Username</label>
+            <label className={`block ${themeColors.textSec} mb-1`}>Username</label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-900 text-slate-200 rounded border border-slate-700"
+              className={`w-full px-3 py-2 ${themeColors.bgInput} ${themeColors.textMain} rounded border ${themeColors.border}`}
               required={isSignUp}
             />
           </div>
         )}
 
         <div>
-          <label className="block text-slate-300 mb-1">Email</label>
+          <label className={`block ${themeColors.textSec} mb-1`}>Email</label>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-900 text-slate-200 rounded border border-slate-700"
+            className={`w-full px-3 py-2 ${themeColors.bgInput} ${themeColors.textMain} rounded border ${themeColors.border}`}
             required
           />
         </div>
 
         <div>
-          <label className="block text-slate-300 mb-1">Password</label>
+          <label className={`block ${themeColors.textSec} mb-1`}>Password</label>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-900 text-slate-200 rounded border border-slate-700"
+            className={`w-full px-3 py-2 ${themeColors.bgInput} ${themeColors.textMain} rounded border ${themeColors.border}`}
             required
             minLength={6}
           />
@@ -287,9 +303,9 @@ export const Auth = ({ onAuthChange }) => {
                   localStorage.removeItem(REMEMBERED_EMAIL_KEY);
                 }
               }}
-              className="w-4 h-4 text-blue-600 bg-slate-900 border-slate-700 rounded focus:ring-blue-500 focus:ring-2"
+              className={`w-4 h-4 ${themeColors.accentText} ${themeColors.bgInput} ${themeColors.border} border rounded focus:ring-2 ${themeColors.accentRing}`}
             />
-            <label htmlFor="rememberEmail" className="ml-2 text-sm text-slate-300 cursor-pointer">
+            <label htmlFor="rememberEmail" className={`ml-2 text-sm ${themeColors.textSec} cursor-pointer`}>
               Remember email
             </label>
           </div>
@@ -298,7 +314,7 @@ export const Auth = ({ onAuthChange }) => {
         <button
           type="submit"
           disabled={loading}
-          className="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+          className={`w-full px-4 py-2 ${themeColors.accentBg} text-white rounded ${themeColors.accentHover} disabled:opacity-50`}
         >
           {loading ? 'Loading...' : (isSignUp ? 'Sign Up' : 'Sign In')}
         </button>
@@ -309,7 +325,7 @@ export const Auth = ({ onAuthChange }) => {
             setIsSignUp(!isSignUp);
             setError(null);
           }}
-          className="w-full text-slate-400 hover:text-slate-200 text-sm"
+          className={`w-full ${themeColors.textSec} hover:${themeColors.textMain} text-sm`}
         >
           {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
         </button>
