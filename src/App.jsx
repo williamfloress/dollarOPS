@@ -1232,6 +1232,55 @@ export default function TradingJournalApp() {
     await saveAllJournalData({ motivationalImages: updatedImages });
   };
 
+  // Migrate base64 images to Supabase Storage
+  const migrateImagesToStorage = async (imagesToCheck = null) => {
+    if (!isSupabaseConfigured() || !user) return;
+    
+    // Use provided images or fall back to state
+    const images = imagesToCheck || motivationalImages;
+    
+    const imagesNeedingMigration = images.filter(
+      img => img.src && img.src.startsWith('data:') && img.needsMigration !== false
+    );
+    
+    if (imagesNeedingMigration.length === 0) return;
+    
+    console.log(`Migrating ${imagesNeedingMigration.length} images to Supabase Storage...`);
+    
+    const migratedImages = [...images];
+    let migrationCount = 0;
+    
+    for (let i = 0; i < imagesNeedingMigration.length; i++) {
+      const image = imagesNeedingMigration[i];
+      const imageIndex = migratedImages.findIndex(img => img.id === image.id);
+      
+      if (imageIndex === -1) continue;
+      
+      try {
+        const { url, error } = await migrateBase64ToStorage(image.src, user.id);
+        if (error) {
+          console.error(`Failed to migrate image ${image.id}:`, error);
+          // Mark as not needing migration to avoid retrying
+          migratedImages[imageIndex].needsMigration = false;
+        } else {
+          // Update image source to URL
+          migratedImages[imageIndex].src = url;
+          migratedImages[imageIndex].needsMigration = false;
+          migrationCount++;
+        }
+      } catch (error) {
+        console.error(`Error migrating image ${image.id}:`, error);
+        migratedImages[imageIndex].needsMigration = false;
+      }
+    }
+    
+    if (migrationCount > 0) {
+      console.log(`Successfully migrated ${migrationCount} images`);
+      setMotivationalImages(migratedImages);
+      await saveAllJournalData({ motivationalImages: migratedImages });
+    }
+  };
+
   // Slideshow handlers
   const toggleSlideshow = () => {
     if (motivationalImages.length >= 3) {
@@ -1350,6 +1399,14 @@ export default function TradingJournalApp() {
             // Supabase user: use initialized field directly
             setIsFirstTime(data.initialized !== true);
             console.log('Supabase user - isFirstTime:', data.initialized !== true, 'initialized:', data.initialized);
+            
+            // Trigger migration after data is loaded
+            if (data.motivationalImages) {
+              // Small delay to ensure state is updated, pass images directly to avoid state timing issues
+              setTimeout(() => {
+                migrateImagesToStorage(data.motivationalImages);
+              }, 1000);
+            }
           } else {
             // localStorage-only: check if any data exists
             const hasData = data.initialized === true || 
@@ -3088,6 +3145,10 @@ export default function TradingJournalApp() {
                                ? `transition-opacity duration-700 ${idx === slideshowIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`
                                : `${idx === slideshowIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`
                            }`}
+                           onError={(e) => {
+                             console.error('Failed to load image:', img.src?.substring(0, 50) + '...');
+                             // Image src is already set, browser will show broken image icon
+                           }}
                          />
                        ))}
                        <button
@@ -3119,7 +3180,15 @@ export default function TradingJournalApp() {
                    <div className="grid grid-cols-1 gap-4">
                      {motivationalImages.map((img) => (
                        <div key={img.id} className={`group relative rounded-xl overflow-hidden shadow-lg border ${theme.border} ${theme.bgCard}`}>
-                         <img src={img.src} alt="Motivation" className="w-full h-auto object-cover hover:scale-105 transition-transform duration-500" />
+                         <img 
+                           src={img.src} 
+                           alt="Motivation" 
+                           className="w-full h-auto object-cover hover:scale-105 transition-transform duration-500" 
+                           onError={(e) => {
+                             console.error('Failed to load image:', img.src?.substring(0, 50) + '...');
+                             // Image src is already set, browser will show broken image icon
+                           }}
+                         />
                          <button onClick={(e) => handleDeleteImage(img.id, e)} className="absolute top-2 right-2 bg-black/50 hover:bg-red-600 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm">
                            <X size={14} />
                          </button>

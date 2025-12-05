@@ -210,7 +210,7 @@ export const loadJournalDataFromSupabase = async (userId) => {
     // Load motivational images
     const { data: images, error: imagesError } = await supabaseClient
       .from('motivational_images')
-      .select('id, image_data')
+      .select('id, image_url, image_data') // Load both for migration
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
@@ -249,7 +249,8 @@ export const loadJournalDataFromSupabase = async (userId) => {
       availablePairs: (pairs || []).map(p => p.pair),
       motivationalImages: (images || []).map(img => ({
         id: parseFloat(img.id),
-        src: img.image_data,
+        src: img.image_url || img.image_data, // Use URL if available, else base64
+        needsMigration: !img.image_url && img.image_data // Flag for migration
       })),
       appTitle: preferences?.app_title || 'ProTrader Journal',
       accountBalance: parseFloat(preferences?.account_balance || 0),
@@ -365,11 +366,15 @@ export const saveJournalDataToSupabase = async (userId, journalData) => {
         errors.push(`Failed to delete existing images: ${deleteImagesError.message}`);
       }
 
-      const imagesToInsert = journalData.motivationalImages.map(image => ({
-        id: image.id.toString(),
-        user_id: userId,
-        image_data: image.src,
-      }));
+      const imagesToInsert = journalData.motivationalImages.map(image => {
+        const isBase64 = image.src && image.src.startsWith('data:');
+        return {
+          id: image.id.toString(),
+          user_id: userId,
+          image_url: isBase64 ? null : image.src, // Store URL if not base64
+          image_data: isBase64 ? image.src : null, // Store base64 only if URL not available
+        };
+      });
 
       if (imagesToInsert.length > 0) {
         const { error: imagesError } = await supabaseClient
