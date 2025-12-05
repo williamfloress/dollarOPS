@@ -331,11 +331,11 @@ export const migrateBase64ToStorage = async (base64Data, userId) => {
 
 ### Step 3.5: Verify Functions Added
 
-- [ ] `STORAGE_BUCKET` constant defined
-- [ ] `uploadImageToStorage()` function added
-- [ ] `deleteImageFromStorage()` function added
-- [ ] `migrateBase64ToStorage()` function added
-- [ ] All functions exported
+- [x] `STORAGE_BUCKET` constant defined
+- [x] `uploadImageToStorage()` function added
+- [x] `deleteImageFromStorage()` function added
+- [x] `migrateBase64ToStorage()` function added
+- [x] All functions exported
 
 **✅ Checkpoint 3 Complete:** Storage utility functions ready.
 
@@ -798,7 +798,7 @@ COMMENT ON TABLE public.motivational_images IS 'Motivational images for vision b
 
 - [x] **Checkpoint 1:** Storage bucket created and configured
 - [x] **Checkpoint 2:** Database schema updated
-- [ ] **Checkpoint 3:** Storage functions added to `supabase.js`
+- [x] **Checkpoint 3:** Storage functions added to `supabase.js`
 - [ ] **Checkpoint 4:** Image upload handler updated
 - [ ] **Checkpoint 5:** Data loading/saving updated
 - [ ] **Checkpoint 6:** Migration logic implemented

@@ -9,6 +9,9 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Storage bucket name
+const STORAGE_BUCKET = 'motivational-images';
+
 // Check if Supabase is configured
 export const isSupabaseConfigured = () => {
   return !!(supabaseUrl && supabaseAnonKey);
@@ -419,6 +422,149 @@ export const saveJournalDataToSupabase = async (userId, journalData) => {
   } catch (error) {
     console.error('Error saving journal data to Supabase:', error);
     return { success: false, error };
+  }
+};
+
+/**
+ * Upload an image file to Supabase Storage
+ * @param {File} file - Image file to upload
+ * @param {string} userId - User ID (for folder organization)
+ * @returns {Promise<{url: string|null, error: Error|null}>}
+ */
+export const uploadImageToStorage = async (file, userId) => {
+  if (!supabaseClient || !userId) {
+    return { url: null, error: new Error('Supabase not configured or no user ID') };
+  }
+
+  try {
+    // Generate unique filename: userId/timestamp-random.ext
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${userId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+    const filePath = fileName;
+
+    // Upload file to storage
+    const { data, error } = await supabaseClient.storage
+      .from(STORAGE_BUCKET)
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (error) {
+      console.error('Error uploading image:', error);
+      return { url: null, error };
+    }
+
+    // Get public URL
+    const { data: urlData } = supabaseClient.storage
+      .from(STORAGE_BUCKET)
+      .getPublicUrl(filePath);
+
+    return { url: urlData.publicUrl, error: null };
+  } catch (error) {
+    console.error('Error uploading image to storage:', error);
+    return { url: null, error };
+  }
+};
+
+/**
+ * Delete an image from Supabase Storage
+ * @param {string} imageUrl - Public URL of the image
+ * @param {string} userId - User ID
+ * @returns {Promise<{success: boolean, error: Error|null}>}
+ */
+export const deleteImageFromStorage = async (imageUrl, userId) => {
+  if (!supabaseClient || !userId) {
+    return { success: false, error: new Error('Supabase not configured or no user ID') };
+  }
+
+  try {
+    // Extract file path from URL
+    // URL format: https://[project].supabase.co/storage/v1/object/public/motivational-images/userId/filename.ext
+    const urlParts = imageUrl.split('/');
+    const bucketIndex = urlParts.findIndex(part => part === STORAGE_BUCKET);
+    
+    if (bucketIndex === -1) {
+      return { success: false, error: new Error('Invalid image URL format') };
+    }
+
+    // Get path after bucket name: userId/filename.ext
+    const filePath = urlParts.slice(bucketIndex + 1).join('/');
+
+    // Delete file from storage
+    const { error } = await supabaseClient.storage
+      .from(STORAGE_BUCKET)
+      .remove([filePath]);
+
+    if (error) {
+      console.error('Error deleting image:', error);
+      return { success: false, error };
+    }
+
+    return { success: true, error: null };
+  } catch (error) {
+    console.error('Error deleting image from storage:', error);
+    return { success: false, error };
+  }
+};
+
+/**
+ * Migrate a base64 image to Supabase Storage
+ * @param {string} base64Data - Base64 data URL (data:image/...;base64,...)
+ * @param {string} userId - User ID
+ * @returns {Promise<{url: string|null, error: Error|null}>}
+ */
+export const migrateBase64ToStorage = async (base64Data, userId) => {
+  if (!supabaseClient || !userId) {
+    return { url: null, error: new Error('Supabase not configured or no user ID') };
+  }
+
+  try {
+    // Parse base64 data URL
+    const matches = base64Data.match(/^data:image\/(\w+);base64,(.+)$/);
+    if (!matches) {
+      return { url: null, error: new Error('Invalid base64 image format') };
+    }
+
+    const mimeType = matches[1];
+    const base64String = matches[2];
+    const fileExt = mimeType === 'jpeg' ? 'jpg' : mimeType;
+
+    // Convert base64 to blob
+    const byteCharacters = atob(base64String);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: `image/${mimeType}` });
+
+    // Generate filename
+    const fileName = `${userId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+    // Upload to storage
+    const { data, error } = await supabaseClient.storage
+      .from(STORAGE_BUCKET)
+      .upload(fileName, blob, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: `image/${mimeType}`
+      });
+
+    if (error) {
+      console.error('Error migrating image:', error);
+      return { url: null, error };
+    }
+
+    // Get public URL
+    const { data: urlData } = supabaseClient.storage
+      .from(STORAGE_BUCKET)
+      .getPublicUrl(fileName);
+
+    return { url: urlData.publicUrl, error: null };
+  } catch (error) {
+    console.error('Error migrating base64 image:', error);
+    return { url: null, error };
   }
 };
 
