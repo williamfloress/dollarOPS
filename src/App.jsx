@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   Calendar, 
   TrendingUp, 
@@ -895,8 +895,16 @@ export default function TradingJournalApp() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingMessage, setLoadingMessage] = useState('Iniciando carga...');
 
-  // Auth change handler
-  const handleAuthChange = (newUser) => {
+  // Auth change handler - memoized to prevent infinite loop in Auth component
+  const handleAuthChange = useCallback((newUser) => {
+    // CRITICAL: If we're in password recovery mode, don't process the user
+    // The Auth component will handle the recovery flow and show the password update form
+    const isRecoveryMode = sessionStorage.getItem('password_recovery_mode') === 'true';
+    if (isRecoveryMode) {
+      // Don't process the user - keep showing Auth component with password update form
+      return;
+    }
+    
     const previousUser = user;
     setUser(newUser);
     
@@ -919,7 +927,7 @@ export default function TradingJournalApp() {
       clearUserData();
       setIsLoadingData(false);
     }
-  };
+  }, [user]); // Only depend on user to prevent infinite loop
 
   // Helper function to clear all user data from state
   const clearUserData = () => {
@@ -2004,8 +2012,15 @@ export default function TradingJournalApp() {
     );
   }
 
-  // Authentication check - show Auth component if Supabase is configured and user is not logged in
-  if (isSupabaseConfigured() && !user) {
+  // CRITICAL: Check for password recovery mode FIRST
+  // sessionStorage is the single source of truth for recovery mode
+  // If recovery mode is active, ALWAYS show Auth component, even if user exists
+  const isRecoveryMode = sessionStorage.getItem('password_recovery_mode') === 'true';
+  
+  // Authentication check - show Auth component if:
+  // 1. Supabase is configured AND user is not logged in, OR
+  // 2. Recovery mode is active (even if user exists from recovery session)
+  if (isSupabaseConfigured() && (!user || isRecoveryMode)) {
     return (
       <div className={`min-h-screen flex items-center justify-center ${THEMES[currentTheme].colors.bgMain} p-4`}>
         <Auth onAuthChange={handleAuthChange} theme={THEMES[currentTheme]} />

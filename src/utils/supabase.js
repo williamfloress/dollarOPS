@@ -249,6 +249,9 @@ export const requestPasswordReset = async (email) => {
   }
 
   try {
+    // Use explicit redirect URL - Supabase will append access_token and type=recovery to the hash
+    // This ensures the app can properly detect and handle the recovery flow
+    // The redirectTo must be registered in Supabase Dashboard > Authentication > URL Configuration > Redirect URLs
     const redirectUrl = `${window.location.origin}${window.location.pathname}`;
     
     const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
