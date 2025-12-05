@@ -28,7 +28,6 @@ export const Auth = ({ onAuthChange, theme }) => {
   const [user, setUser] = useState(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [username, setUsername] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -120,7 +119,7 @@ export const Auth = ({ onAuthChange, theme }) => {
     try {
       let result;
       if (isSignUp) {
-        result = await signUp(email, password, username);
+        result = await signUp(email, password);
         
         // After sign up, show verification pending page instead of logging in
         if (!result.error) {
@@ -128,7 +127,6 @@ export const Auth = ({ onAuthChange, theme }) => {
           setPendingEmail(email);
           // Reset form but keep email for display
           setPassword('');
-          setUsername('');
           setLoading(false);
           return;
         }
@@ -153,7 +151,6 @@ export const Auth = ({ onAuthChange, theme }) => {
         // Reset form
         setEmail('');
         setPassword('');
-        setUsername('');
         setShowVerificationLogin(false);
       }
     } catch (err) {
@@ -253,19 +250,6 @@ export const Auth = ({ onAuthChange, theme }) => {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {isSignUp && (
-          <div>
-            <label className={`block ${themeColors.textSec} mb-1`}>Username</label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className={`w-full px-3 py-2 ${themeColors.bgInput} ${themeColors.textMain} rounded border ${themeColors.border}`}
-              required={isSignUp}
-            />
-          </div>
-        )}
-
         <div>
           <label className={`block ${themeColors.textSec} mb-1`}>Email</label>
           <input

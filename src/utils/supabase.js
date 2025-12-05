@@ -37,6 +37,81 @@ export const getSupabaseClient = () => {
 };
 
 /**
+ * Ensure user profile exists, create if it doesn't
+ * @param {string} userId - User ID
+ * @param {string} email - User email (username is derived from email prefix)
+ * @returns {Promise<{success: boolean, error: Error|null}>}
+ */
+const ensureUserProfileExists = async (userId, email) => {
+  if (!supabaseClient || !userId) {
+    return { success: false, error: new Error('Supabase not configured or no user ID') };
+  }
+
+  try {
+    // Check if profile exists
+    const { data: existingProfile, error: checkError } = await supabaseClient
+      .from('user_profiles')
+      .select('id')
+      .eq('id', userId)
+      .single();
+
+    // If profile doesn't exist, create it
+    if (!existingProfile || checkError) {
+      // Always use email prefix as username
+      const username = email.split('@')[0];
+      
+      const { error: insertError } = await supabaseClient
+        .from('user_profiles')
+        .insert({
+          id: userId,
+          username: username,
+        });
+
+      if (insertError) {
+        // If insert fails, check if it's because profile already exists (race condition)
+        if (insertError.code !== '23505') { // 23505 is unique_violation in PostgreSQL
+          console.error('Error creating user profile:', insertError);
+          return { success: false, error: insertError };
+        }
+        // Profile was created by another request, that's fine
+      } else {
+        console.log('User profile created for user:', userId);
+      }
+    }
+
+    // Ensure user preferences exist
+    const { data: existingPrefs, error: prefsCheckError } = await supabaseClient
+      .from('user_preferences')
+      .select('id')
+      .eq('id', userId)
+      .single();
+
+    if (!existingPrefs || prefsCheckError) {
+      const { error: prefsError } = await supabaseClient
+        .from('user_preferences')
+        .insert({
+          id: userId,
+        });
+
+      if (prefsError) {
+        // If insert fails, check if it's because preferences already exist
+        if (prefsError.code !== '23505') {
+          console.error('Error creating user preferences:', prefsError);
+          // Don't fail if preferences creation fails, it's not critical
+        }
+      } else {
+        console.log('User preferences created for user:', userId);
+      }
+    }
+
+    return { success: true, error: null };
+  } catch (error) {
+    console.error('Error ensuring user profile exists:', error);
+    return { success: false, error };
+  }
+};
+
+/**
  * Get current authenticated user
  * @returns {Promise<{user: Object|null, error: Error|null}>}
  */
@@ -47,6 +122,12 @@ export const getCurrentUser = async () => {
 
   try {
     const { data: { user }, error } = await supabaseClient.auth.getUser();
+    
+    // Ensure profile exists if user is authenticated
+    if (user && !error) {
+      await ensureUserProfileExists(user.id, user.email);
+    }
+    
     return { user, error };
   } catch (error) {
     console.error('Error getting current user:', error);
@@ -58,10 +139,9 @@ export const getCurrentUser = async () => {
  * Sign up a new user
  * @param {string} email - User email
  * @param {string} password - User password
- * @param {string} username - Username
  * @returns {Promise<{user: Object|null, error: Error|null}>}
  */
-export const signUp = async (email, password, username) => {
+export const signUp = async (email, password) => {
   if (!supabaseClient) {
     return { user: null, error: new Error('Supabase not configured') };
   }
@@ -85,30 +165,10 @@ export const signUp = async (email, password, username) => {
       return { user: null, error: authError };
     }
 
-    // Create user profile (only if user exists - might not exist if email confirmation is required)
+    // Ensure user profile exists (only if user exists - might not exist if email confirmation is required)
+    // Username will be automatically set to the email prefix
     if (authData.user) {
-      const { error: profileError } = await supabaseClient
-        .from('user_profiles')
-        .insert({
-          id: authData.user.id,
-          username: username || email.split('@')[0],
-        });
-
-      if (profileError) {
-        console.error('Error creating user profile:', profileError);
-        // Don't fail signup if profile creation fails
-      }
-
-      // Create default preferences
-      const { error: prefsError } = await supabaseClient
-        .from('user_preferences')
-        .insert({
-          id: authData.user.id,
-        });
-
-      if (prefsError) {
-        console.error('Error creating user preferences:', prefsError);
-      }
+      await ensureUserProfileExists(authData.user.id, email);
     }
 
     // Return user data (user might not be confirmed yet)
@@ -141,8 +201,12 @@ export const signIn = async (email, password) => {
       return { user: null, error };
     }
 
-    // Update last login
+    // Ensure profile exists and update last login
     if (data.user) {
+      // Ensure profile exists first (in case it wasn't created during signup)
+      await ensureUserProfileExists(data.user.id, data.user.email);
+      
+      // Update last login
       await supabaseClient
         .from('user_profiles')
         .update({ last_login: new Date().toISOString() })
