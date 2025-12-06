@@ -644,98 +644,137 @@ export const Auth = ({ onAuthChange, theme }) => {
 
   // Show normal login/signup form
   return (
-    <div className={`p-4 ${themeColors.bgCard} rounded-lg max-w-md mx-auto`}>
-      {showVerificationLogin && (
-        <div className={`mb-4 p-3 ${themeColors.accentBg}/50 border ${themeColors.accentBorder} rounded ${themeColors.accentText} text-sm`}>
-          <p className="font-semibold mb-1">Email Verified!</p>
-          <p>Please sign in with your email and password to continue.</p>
-        </div>
-      )}
-      <h2 className={`text-xl font-bold ${themeColors.textMain} mb-4`}>
-        {isSignUp ? 'Sign Up' : 'Sign In'}
-      </h2>
-      
-      {error && (
-        <div className="mb-4 p-2 bg-red-900/50 text-red-200 rounded">
-          {error}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className={`block ${themeColors.textSec} mb-1`}>Email</label>
-          <input
-            type="email"
-            value={email}
-            onChange={handleEmailChange}
-            className={`w-full px-3 py-2 ${themeColors.bgInput} ${themeColors.textMain} rounded border ${themeColors.border}`}
-            required
-          />
-        </div>
-
-        <div>
-          <label className={`block ${themeColors.textSec} mb-1`}>Password</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className={`w-full px-3 py-2 ${themeColors.bgInput} ${themeColors.textMain} rounded border ${themeColors.border}`}
-            required
-            minLength={6}
-          />
-        </div>
-
-        {!isSignUp && (
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="rememberEmail"
-              checked={rememberEmail}
-              onChange={(e) => {
-                const checked = e.target.checked;
-                setRememberEmail(checked);
-                // If unchecking, clear the stored email immediately (pre-auth data, localStorage is fine)
-                if (!checked) {
-                  localStorage.removeItem(REMEMBERED_EMAIL_KEY);
-                }
-              }}
-              className={`w-4 h-4 ${themeColors.accentText} ${themeColors.bgInput} ${themeColors.border} border rounded focus:ring-2 ${themeColors.accentRing}`}
-            />
-            <label htmlFor="rememberEmail" className={`ml-2 text-sm ${themeColors.textSec} cursor-pointer`}>
-              Remember email
-            </label>
+    <div className={`min-h-screen flex items-center justify-center p-4 ${themeColors.bgMain}`}>
+      {/* Main card */}
+      <div className={`${themeColors.bgCard} rounded-2xl shadow-2xl border ${themeColors.border} max-w-md w-full p-8`}>
+        {showVerificationLogin && (
+          <div className={`mb-6 p-4 ${themeColors.accentBg}/50 border ${themeColors.accentBorder} rounded-lg ${themeColors.accentText} text-sm`}>
+            <p className="font-semibold mb-1">Email Verified!</p>
+            <p>Please sign in with your email and password to continue.</p>
           </div>
         )}
 
-        {!isSignUp && (
+        {/* Welcome Title */}
+        <h1 className={`text-3xl font-bold ${themeColors.textMain} mb-2`}>
+          DollarOPS
+        </h1>
+        <p className={`text-sm ${themeColors.textSec} mb-8`}>
+          Sign in to your account or create a new one
+        </p>
+
+        {/* Tab Buttons */}
+        <div className={`flex gap-2 mb-8 ${themeColors.bgInput} p-1 rounded-lg`}>
           <button
             type="button"
-            onClick={() => setShowPasswordReset(true)}
-            className={`text-sm ${themeColors.accentText} hover:underline`}
+            onClick={() => {
+              setIsSignUp(false);
+              setError(null);
+            }}
+            className={`flex-1 py-2.5 px-4 rounded-lg font-medium text-sm transition-all ${
+              !isSignUp
+                ? `${themeColors.accentBg} text-white shadow-lg`
+                : `${themeColors.textSec} hover:${themeColors.textMain}`
+            }`}
           >
-            Forgot Password?
+            Sign In
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              setIsSignUp(true);
+              setError(null);
+            }}
+            className={`flex-1 py-2.5 px-4 rounded-lg font-medium text-sm transition-all ${
+              isSignUp
+                ? `${themeColors.accentBg} text-white shadow-lg`
+                : `${themeColors.textSec} hover:${themeColors.textMain}`
+            }`}
+          >
+            Sign Up
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-6 p-3 bg-red-900/50 text-red-200 rounded-lg text-sm border border-red-800">
+            {error}
+          </div>
         )}
 
-        <button
-          type="submit"
-          disabled={loading}
-          className={`w-full px-4 py-2 ${themeColors.accentBg} text-white rounded ${themeColors.accentHover} disabled:opacity-50`}
-        >
-          {loading ? 'Loading...' : (isSignUp ? 'Sign Up' : 'Sign In')}
-        </button>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Email Input */}
+          <div>
+            <label className={`block ${themeColors.textSec} mb-2 text-sm font-medium`}>
+              Email
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={handleEmailChange}
+              placeholder="you@example.com"
+              className={`w-full px-4 py-3 ${themeColors.bgInput} ${themeColors.textMain} rounded-lg border ${themeColors.border} focus:outline-none focus:ring-2 ${themeColors.accentRing} transition-all`}
+              required
+            />
+          </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            setIsSignUp(!isSignUp);
-            setError(null);
-          }}
-          className={`w-full ${themeColors.textSec} hover:${themeColors.textMain} text-sm`}
-        >
-          {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
-        </button>
-      </form>
+          {/* Password Input */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className={`block ${themeColors.textSec} text-sm font-medium`}>
+                Password
+              </label>
+              {!isSignUp && (
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordReset(true)}
+                  className={`text-sm ${themeColors.accentText} hover:underline`}
+                >
+                  Forgot password?
+                </button>
+              )}
+            </div>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className={`w-full px-4 py-3 ${themeColors.bgInput} ${themeColors.textMain} rounded-lg border ${themeColors.border} focus:outline-none focus:ring-2 ${themeColors.accentRing} transition-all`}
+              required
+              minLength={6}
+            />
+          </div>
+
+          {/* Remember Email Checkbox */}
+          {!isSignUp && (
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="rememberEmail"
+                checked={rememberEmail}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setRememberEmail(checked);
+                  // If unchecking, clear the stored email immediately (pre-auth data, localStorage is fine)
+                  if (!checked) {
+                    localStorage.removeItem(REMEMBERED_EMAIL_KEY);
+                  }
+                }}
+                className={`w-4 h-4 ${themeColors.accentText} ${themeColors.bgInput} ${themeColors.border} border rounded focus:ring-2 ${themeColors.accentRing} cursor-pointer`}
+              />
+              <label htmlFor="rememberEmail" className={`ml-2 text-sm ${themeColors.textSec} cursor-pointer`}>
+                Remember email
+              </label>
+            </div>
+          )}
+
+          {/* Submit Button */}
+          <button
+            type="submit"
+            disabled={loading}
+            className={`w-full py-3 px-4 ${themeColors.accentBg} text-white rounded-lg font-medium ${themeColors.accentHover} disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg`}
+          >
+            {loading ? 'Loading...' : (isSignUp ? 'Sign Up' : 'Sign In')}
+          </button>
+        </form>
+      </div>
     </div>
   );
 };
