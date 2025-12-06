@@ -58,7 +58,12 @@ export const Auth = ({ onAuthChange, theme }) => {
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
     const type = hashParams.get('type');
     const accessToken = hashParams.get('access_token');
+    // CRITICAL: Determine flow based on type parameter first
+    // type='recovery' = password reset flow
+    // type='email' or type='signup' = email verification flow
+    // If type is null/undefined but access_token exists, it could be either, but we prioritize checking type
     const isRecoveryFlow = type === 'recovery';
+    const isEmailVerificationFlow = type === 'email' || type === 'signup';
     
     // Set up auth state listener FIRST to catch any session creation
     // This must be set up before Supabase processes the hash
@@ -83,12 +88,25 @@ export const Auth = ({ onAuthChange, theme }) => {
       }
       
       // Check if we're in recovery mode (from sessionStorage or hash)
+      // CRITICAL: Only check for recovery if type is 'recovery', not just if access_token exists
+      // because email verification also includes access_token
       const isRecoveryInStorage = sessionStorage.getItem('password_recovery_mode') === 'true';
       const currentHashParams = new URLSearchParams(window.location.hash.substring(1));
-      const isCurrentlyRecovery = currentHashParams.get('type') === 'recovery' || currentHashParams.has('access_token');
+      const currentType = currentHashParams.get('type');
+      // Only treat as recovery if type is explicitly 'recovery'
+      // If type is 'email' or 'signup', it's email verification, NOT recovery
+      const isCurrentlyRecovery = currentType === 'recovery';
+      const isEmailVerificationInUrl = currentType === 'email' || currentType === 'signup';
+      
+      // CRITICAL: If this is email verification, clear any recovery mode flags
+      // and allow normal login flow
+      if (isEmailVerificationInUrl && isRecoveryInStorage) {
+        console.log('🔐 Email verification detected - clearing recovery mode');
+        sessionStorage.removeItem('password_recovery_mode');
+      }
       
       // If we're in recovery mode, don't process normal auth flow
-      if (isRecoveryInStorage || isCurrentlyRecovery) {
+      if ((isRecoveryInStorage || isCurrentlyRecovery) && !isEmailVerificationInUrl) {
         console.log('🔐 Recovery mode active - keeping session but not showing as logged in');
         // Ensure recovery mode is marked
         if (!isRecoveryInStorage) {
@@ -100,16 +118,17 @@ export const Auth = ({ onAuthChange, theme }) => {
       }
       
       // Normal auth flow - only process if NOT in recovery mode
-      console.log('🔐 Normal auth flow: Setting user');
+      // This includes email verification flow - user should be logged in automatically
+      console.log('🔐 Normal auth flow: Setting user (event:', event, ')');
       setUser(session?.user || null);
       if (onAuthChange) onAuthChange(session?.user || null);
     });
     
-    // If recovery token detected in URL, mark recovery mode immediately
-    // Also check for access_token (Supabase may add this when processing recovery token)
-    const hasAccessToken = hashParams.has('access_token');
-    if (isRecoveryFlow || hasAccessToken) {
-      console.log('🔐 Recovery token detected in URL - marking recovery mode', { isRecoveryFlow, hasAccessToken });
+    // CRITICAL: Handle recovery flow FIRST (password reset)
+    // Only if type is explicitly 'recovery', NOT just if access_token exists
+    // because email verification also includes access_token
+    if (isRecoveryFlow) {
+      console.log('🔐 Recovery token detected in URL (type=recovery) - marking recovery mode');
       // Mark recovery mode in sessionStorage - this is the single source of truth
       sessionStorage.setItem('password_recovery_mode', 'true');
       setShowPasswordUpdate(true);
@@ -122,31 +141,30 @@ export const Auth = ({ onAuthChange, theme }) => {
     }
 
     // Handle email verification flow
-    // BUT exclude access_token if we're in recovery flow (access_token can be in both flows)
-    const hasVerificationParams = (type === 'email' || type === 'signup') && !isRecoveryFlow;
-    if (hasVerificationParams) {
-      console.log('🔐 Email verification token detected');
-      supabase.auth.getSession().then(async ({ data: { session } }) => {
-        if (session) {
-          // Email is verified, but we want user to log in manually
-          await supabase.auth.signOut();
-          setUser(null);
-          if (onAuthChange) onAuthChange(null);
+    // This handles type='email' or type='signup' which are email verification flows
+    // These should NOT be treated as recovery, even if they have access_token
+    // When email is verified, Supabase creates a session automatically - we should allow the user in
+    if (isEmailVerificationFlow) {
+      console.log('🔐 Email verification token detected (type=' + type + ')');
+      // Wait for Supabase to process the token and create a session
+      // The auth state listener will handle setting the user when the session is created
+      // Just clear the URL hash so it doesn't interfere
+      setTimeout(() => {
+        if (window.location.hash) {
+          window.history.replaceState(null, '', window.location.pathname);
         }
-        // Show login form with verification success message
-        setShowVerificationLogin(true);
-        // Clear URL hash
-        window.history.replaceState(null, '', window.location.pathname);
-      });
-    } else {
-      // Normal flow - check for existing session
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) {
-          setUser(session.user);
-          if (onAuthChange) onAuthChange(session.user);
-        }
-      });
+      }, 1000);
+      // Don't return early - let the auth state listener handle the session
+      // The listener will call onAuthChange with the user, which will redirect to journal
     }
+    
+    // Normal flow - check for existing session (no special tokens in URL)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setUser(session.user);
+        if (onAuthChange) onAuthChange(session.user);
+      }
+    });
 
     // Check user in normal flow
     checkUser();
@@ -544,6 +562,87 @@ export const Auth = ({ onAuthChange, theme }) => {
     );
   }
 
+  // Show password reset form if requested (only this form, no login form)
+  if (showPasswordReset && !resetSent) {
+    return (
+      <div className={`p-4 ${themeColors.bgCard} rounded-lg max-w-md mx-auto`}>
+        <h2 className={`text-xl font-bold ${themeColors.textMain} mb-4`}>
+          Reset Password
+        </h2>
+        
+        {error && (
+          <div className="mb-4 p-2 bg-red-900/50 text-red-200 rounded">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handlePasswordResetRequest} className="space-y-4">
+          <div>
+            <label className={`block ${themeColors.textSec} mb-1`}>Email</label>
+            <input
+              type="email"
+              value={resetEmail}
+              onChange={(e) => setResetEmail(e.target.value)}
+              className={`w-full px-3 py-2 ${themeColors.bgInput} ${themeColors.textMain} rounded border ${themeColors.border}`}
+              required
+              autoFocus
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={loading}
+              className={`flex-1 px-4 py-2 ${themeColors.accentBg} text-white rounded ${themeColors.accentHover} disabled:opacity-50`}
+            >
+              {loading ? 'Sending...' : 'Send Reset Link'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowPasswordReset(false);
+                setResetEmail('');
+                setError(null);
+              }}
+              className={`px-4 py-2 ${themeColors.bgInput} ${themeColors.textMain} rounded border ${themeColors.border}`}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
+
+  // Show reset sent confirmation
+  if (resetSent) {
+    return (
+      <div className={`p-4 ${themeColors.bgCard} rounded-lg max-w-md mx-auto`}>
+        <h2 className={`text-xl font-bold ${themeColors.textMain} mb-4`}>
+          Reset Password
+        </h2>
+        <div className={`p-4 ${themeColors.accentBg}/50 border ${themeColors.accentBorder} rounded`}>
+          <p className={`${themeColors.textMain} mb-2`}>
+            Password reset email sent!
+          </p>
+          <p className={`text-sm ${themeColors.textSec}`}>
+            Check your email for a password reset link. Click the link to reset your password.
+          </p>
+          <button
+            onClick={() => {
+              setResetSent(false);
+              setShowPasswordReset(false);
+              setResetEmail('');
+            }}
+            className={`mt-3 text-sm ${themeColors.accentText} hover:underline`}
+          >
+            Back to Sign In
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show normal login/signup form
   return (
     <div className={`p-4 ${themeColors.bgCard} rounded-lg max-w-md mx-auto`}>
       {showVerificationLogin && (
@@ -608,7 +707,7 @@ export const Auth = ({ onAuthChange, theme }) => {
           </div>
         )}
 
-        {!isSignUp && !showPasswordReset && (
+        {!isSignUp && (
           <button
             type="button"
             onClick={() => setShowPasswordReset(true)}
@@ -637,73 +736,6 @@ export const Auth = ({ onAuthChange, theme }) => {
           {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
         </button>
       </form>
-
-      {showPasswordReset && !resetSent && (
-        <div className="mt-4 p-4 border-t border-slate-700">
-          <h3 className={`text-lg font-semibold ${themeColors.textMain} mb-2`}>
-            Reset Password
-          </h3>
-          <form onSubmit={handlePasswordResetRequest} className="space-y-4">
-            <div>
-              <label className={`block ${themeColors.textSec} mb-1`}>Email</label>
-              <input
-                type="email"
-                value={resetEmail}
-                onChange={(e) => setResetEmail(e.target.value)}
-                className={`w-full px-3 py-2 ${themeColors.bgInput} ${themeColors.textMain} rounded border ${themeColors.border}`}
-                required
-              />
-            </div>
-            {error && (
-              <div className="p-2 bg-red-900/50 text-red-200 rounded text-sm">
-                {error}
-              </div>
-            )}
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                disabled={loading}
-                className={`flex-1 px-4 py-2 ${themeColors.accentBg} text-white rounded ${themeColors.accentHover} disabled:opacity-50`}
-              >
-                {loading ? 'Sending...' : 'Send Reset Link'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowPasswordReset(false);
-                  setResetEmail('');
-                  setError(null);
-                }}
-                className={`px-4 py-2 ${themeColors.bgInput} ${themeColors.textMain} rounded border ${themeColors.border}`}
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {resetSent && (
-        <div className={`mt-4 p-4 ${themeColors.accentBg}/50 border ${themeColors.accentBorder} rounded`}>
-          <p className={`${themeColors.textMain} mb-2`}>
-            Password reset email sent!
-          </p>
-          <p className={`text-sm ${themeColors.textSec}`}>
-            Check your email for a password reset link. Click the link to reset your password.
-          </p>
-          <button
-            onClick={() => {
-              setResetSent(false);
-              setShowPasswordReset(false);
-              setResetEmail('');
-            }}
-            className={`mt-3 text-sm ${themeColors.accentText} hover:underline`}
-          >
-            Back to Sign In
-          </button>
-        </div>
-      )}
-
     </div>
   );
 };

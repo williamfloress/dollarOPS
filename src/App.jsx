@@ -1011,11 +1011,16 @@ export default function TradingJournalApp() {
       // This must happen before checking for existing session
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
       const type = hashParams.get('type');
-      const hasAccessToken = hashParams.has('access_token');
       const isRecoveryFlow = type === 'recovery';
+      const isEmailVerificationFlow = type === 'email' || type === 'signup';
       
-      // If recovery token is detected, mark recovery mode immediately
-      if (isRecoveryFlow || hasAccessToken) {
+      // CRITICAL: Only mark recovery mode if type is explicitly 'recovery'
+      // Email verification also has access_token, so we must check type first
+      // If it's email verification, clear any recovery mode flags
+      if (isEmailVerificationFlow) {
+        console.log('🔐 Email verification detected in URL during mount - clearing recovery mode');
+        sessionStorage.removeItem('password_recovery_mode');
+      } else if (isRecoveryFlow) {
         console.log('🔐 Recovery token detected in URL during mount - marking recovery mode');
         sessionStorage.setItem('password_recovery_mode', 'true');
         // Don't set user - let Auth component handle the recovery flow
@@ -1046,10 +1051,16 @@ export default function TradingJournalApp() {
     const handleHashChange = () => {
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
       const type = hashParams.get('type');
-      const hasAccessToken = hashParams.has('access_token');
       const isRecoveryFlow = type === 'recovery';
+      const isEmailVerificationFlow = type === 'email' || type === 'signup';
       
-      if (isRecoveryFlow || hasAccessToken) {
+      // CRITICAL: Only mark recovery mode if type is explicitly 'recovery'
+      // Email verification also has access_token, so we must check type first
+      if (isEmailVerificationFlow) {
+        console.log('🔐 Email verification detected in URL hash change - clearing recovery mode');
+        sessionStorage.removeItem('password_recovery_mode');
+        // Don't clear user - let them log in automatically
+      } else if (isRecoveryFlow) {
         console.log('🔐 Recovery token detected in URL hash change - marking recovery mode');
         sessionStorage.setItem('password_recovery_mode', 'true');
         // Force re-render to show Auth component
