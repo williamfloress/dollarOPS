@@ -899,8 +899,20 @@ export default function TradingJournalApp() {
   const handleAuthChange = useCallback((newUser) => {
     // CRITICAL: If we're in password recovery mode, don't process the user
     // The Auth component will handle the recovery flow and show the password update form
-    const isRecoveryMode = sessionStorage.getItem('password_recovery_mode') === 'true';
+    // Check both sessionStorage and URL hash as fallback
+    const storageRecoveryMode = sessionStorage.getItem('password_recovery_mode') === 'true';
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const urlRecoveryType = hashParams.get('type');
+    const hasAccessToken = hashParams.has('access_token');
+    const urlRecoveryMode = urlRecoveryType === 'recovery' || hasAccessToken;
+    const isRecoveryMode = storageRecoveryMode || urlRecoveryMode;
+    
     if (isRecoveryMode) {
+      console.log('🔐 Recovery mode active in handleAuthChange - ignoring user change');
+      // Mark recovery mode if URL indicates it but sessionStorage doesn't
+      if (urlRecoveryMode && !storageRecoveryMode) {
+        sessionStorage.setItem('password_recovery_mode', 'true');
+      }
       // Don't process the user - keep showing Auth component with password update form
       return;
     }
@@ -995,9 +1007,29 @@ export default function TradingJournalApp() {
         return;
       }
       
+      // CRITICAL: Check for password recovery token in URL FIRST (synchronously)
+      // This must happen before checking for existing session
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const type = hashParams.get('type');
+      const hasAccessToken = hashParams.has('access_token');
+      const isRecoveryFlow = type === 'recovery';
+      
+      // If recovery token is detected, mark recovery mode immediately
+      if (isRecoveryFlow || hasAccessToken) {
+        console.log('🔐 Recovery token detected in URL during mount - marking recovery mode');
+        sessionStorage.setItem('password_recovery_mode', 'true');
+        // Don't set user - let Auth component handle the recovery flow
+        setIsCheckingAuth(false);
+        return;
+      }
+      
       try {
         const { user: currentUser } = await getCurrentUser();
-        setUser(currentUser);
+        // Only set user if we're not in recovery mode
+        const isRecoveryMode = sessionStorage.getItem('password_recovery_mode') === 'true';
+        if (!isRecoveryMode) {
+          setUser(currentUser);
+        }
       } catch (error) {
         console.error('Error checking auth:', error);
       } finally {
@@ -1006,6 +1038,34 @@ export default function TradingJournalApp() {
     };
     
     checkAuth();
+  }, []);
+
+  // Listen for hash changes to detect password recovery token
+  // This handles the case where user clicks recovery link while already logged in
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const type = hashParams.get('type');
+      const hasAccessToken = hashParams.has('access_token');
+      const isRecoveryFlow = type === 'recovery';
+      
+      if (isRecoveryFlow || hasAccessToken) {
+        console.log('🔐 Recovery token detected in URL hash change - marking recovery mode');
+        sessionStorage.setItem('password_recovery_mode', 'true');
+        // Force re-render to show Auth component
+        setUser(null);
+      }
+    };
+
+    // Check immediately in case hash is already present
+    handleHashChange();
+    
+    // Listen for hash changes
+    window.addEventListener('hashchange', handleHashChange);
+    
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+    };
   }, []);
 
   // Sync theme type filter when current theme changes
@@ -2013,9 +2073,19 @@ export default function TradingJournalApp() {
   }
 
   // CRITICAL: Check for password recovery mode FIRST
-  // sessionStorage is the single source of truth for recovery mode
-  // If recovery mode is active, ALWAYS show Auth component, even if user exists
-  const isRecoveryMode = sessionStorage.getItem('password_recovery_mode') === 'true';
+  // Check both sessionStorage (the source of truth) and URL hash (fallback detection)
+  const hashParams = new URLSearchParams(window.location.hash.substring(1));
+  const urlRecoveryType = hashParams.get('type');
+  const hasAccessToken = hashParams.has('access_token');
+  const urlRecoveryMode = urlRecoveryType === 'recovery' || hasAccessToken;
+  const storageRecoveryMode = sessionStorage.getItem('password_recovery_mode') === 'true';
+  const isRecoveryMode = storageRecoveryMode || urlRecoveryMode;
+  
+  // If URL indicates recovery but sessionStorage doesn't, mark it now
+  if (urlRecoveryMode && !storageRecoveryMode) {
+    console.log('🔐 URL recovery mode detected - marking in sessionStorage');
+    sessionStorage.setItem('password_recovery_mode', 'true');
+  }
   
   // Authentication check - show Auth component if:
   // 1. Supabase is configured AND user is not logged in, OR

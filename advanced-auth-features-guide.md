@@ -357,8 +357,8 @@ const handlePasswordUpdate = async (e) => {
 
 ### Checkpoint 2.1: Add Resend Verification Email Function
 
-- [ ] **2.1.1** Open `src/utils/supabase.js`
-- [ ] **2.1.2** Add resend verification email function:
+- [x] **2.1.1** Open `src/utils/supabase.js`
+- [x] **2.1.2** Add resend verification email function:
 
 ```javascript
 /**
@@ -400,20 +400,20 @@ export const resendVerificationEmail = async (email) => {
 
 ### Checkpoint 2.2: Add Resend Button to Auth Component
 
-- [ ] **2.2.1** Open `src/components/Auth.jsx`
-- [ ] **2.2.2** Import resend function:
+- [x] **2.2.1** Open `src/components/Auth.jsx`
+- [x] **2.2.2** Import resend function:
 
 ```javascript
 import { resendVerificationEmail } from '../utils/supabase.js';
 ```
 
-- [ ] **2.2.3** Add state for resend functionality:
+- [x] **2.2.3** Add state for resend functionality:
 
 ```javascript
 const [resendCooldown, setResendCooldown] = useState(0);
 ```
 
-- [ ] **2.2.4** Add resend handler:
+- [x] **2.2.4** Add resend handler:
 
 ```javascript
 const handleResendVerification = async () => {
@@ -447,7 +447,7 @@ const handleResendVerification = async () => {
 };
 ```
 
-- [ ] **2.2.5** Update verification pending UI to include resend button:
+- [x] **2.2.5** Update verification pending UI to include resend button:
 
 ```javascript
 // In the verificationPending section, add after the "Back to Sign In" button:

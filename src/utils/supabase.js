@@ -296,6 +296,38 @@ export const updatePassword = async (newPassword) => {
 };
 
 /**
+ * Resend verification email
+ * @param {string} email - User email
+ * @returns {Promise<{success: boolean, error: Error|null}>}
+ */
+export const resendVerificationEmail = async (email) => {
+  if (!supabaseClient) {
+    return { success: false, error: new Error('Supabase not configured') };
+  }
+
+  try {
+    const redirectUrl = `${window.location.origin}${window.location.pathname}`;
+    
+    const { error } = await supabaseClient.auth.resend({
+      type: 'signup',
+      email: email,
+      options: {
+        emailRedirectTo: redirectUrl,
+      },
+    });
+
+    if (error) {
+      return { success: false, error };
+    }
+
+    return { success: true, error: null };
+  } catch (error) {
+    console.error('Error resending verification email:', error);
+    return { success: false, error };
+  }
+};
+
+/**
  * Load all journal data from Supabase
  * @param {string} userId - User ID
  * @returns {Promise<{data: Object|null, error: Error|null}>}

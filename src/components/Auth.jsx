@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { signIn, signUp, signOut, getCurrentUser, isSupabaseConfigured, getSupabaseClient, requestPasswordReset, updatePassword } from '../utils/supabase.js';
+import { signIn, signUp, signOut, getCurrentUser, isSupabaseConfigured, getSupabaseClient, requestPasswordReset, updatePassword, resendVerificationEmail } from '../utils/supabase.js';
 
 /**
  * Storage key for remembered email (pre-authentication data)
@@ -41,6 +41,7 @@ export const Auth = ({ onAuthChange, theme }) => {
   const [showPasswordUpdate, setShowPasswordUpdate] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   useEffect(() => {
     if (!isSupabaseConfigured()) {
@@ -343,6 +344,36 @@ export const Auth = ({ onAuthChange, theme }) => {
     }
   };
 
+  const handleResendVerification = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { success, error } = await resendVerificationEmail(pendingEmail);
+      
+      if (error) {
+        setError(error.message);
+      } else if (success) {
+        setError(null);
+        // Set cooldown timer (60 seconds)
+        setResendCooldown(60);
+        const timer = setInterval(() => {
+          setResendCooldown((prev) => {
+            if (prev <= 1) {
+              clearInterval(timer);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // If Supabase is not configured, don't show auth UI
   if (!isSupabaseConfigured()) {
     return null;
@@ -360,7 +391,7 @@ export const Auth = ({ onAuthChange, theme }) => {
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
     const urlRecoveryType = hashParams.get('type');
     
-    console.log('🔐 Render: Showing password update form (recovery mode detected)', {
+    console.log('🔐 Render: Showing password update modal (recovery mode detected)', {
       urlRecoveryType,
       showPasswordUpdate,
       user: user ? 'exists' : 'null'
@@ -368,47 +399,72 @@ export const Auth = ({ onAuthChange, theme }) => {
     
     // CRITICAL: Even if user exists (from recovery session), don't show user as logged in
     // The recovery session is temporary and only for password update
+    // Show as modal overlay
     return (
-      <div className={`p-4 ${themeColors.bgCard} rounded-lg max-w-md mx-auto`}>
-        <h2 className={`text-xl font-bold ${themeColors.textMain} mb-4`}>
-          Set New Password
-        </h2>
-        <form onSubmit={handlePasswordUpdate} className="space-y-4">
-          <div>
-            <label className={`block ${themeColors.textSec} mb-1`}>New Password</label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className={`w-full px-3 py-2 ${themeColors.bgInput} ${themeColors.textMain} rounded border ${themeColors.border}`}
-              required
-              minLength={6}
-            />
-          </div>
-          <div>
-            <label className={`block ${themeColors.textSec} mb-1`}>Confirm Password</label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className={`w-full px-3 py-2 ${themeColors.bgInput} ${themeColors.textMain} rounded border ${themeColors.border}`}
-              required
-              minLength={6}
-            />
-          </div>
-          {error && (
-            <div className="p-2 bg-red-900/50 text-red-200 rounded text-sm">
-              {error}
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div className={`${themeColors.bgCard} rounded-lg max-w-md w-full shadow-2xl border ${themeColors.border} animate-in fade-in duration-300`}>
+          <div className="p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className={`p-2 ${themeColors.accentBg} rounded-lg`}>
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className={`text-xl font-bold ${themeColors.textMain}`}>
+                  Restablecer Contraseña
+                </h2>
+                <p className={`text-sm ${themeColors.textSec} mt-1`}>
+                  Ingresa tu nueva contraseña
+                </p>
+              </div>
             </div>
-          )}
-          <button
-            type="submit"
-            disabled={loading}
-            className={`w-full px-4 py-2 ${themeColors.accentBg} text-white rounded ${themeColors.accentHover} disabled:opacity-50`}
-          >
-            {loading ? 'Updating...' : 'Update Password'}
-          </button>
-        </form>
+            
+            <form onSubmit={handlePasswordUpdate} className="space-y-4">
+              <div>
+                <label className={`block ${themeColors.textSec} mb-1 text-sm font-medium`}>
+                  Nueva Contraseña
+                </label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className={`w-full px-3 py-2 ${themeColors.bgInput} ${themeColors.textMain} rounded border ${themeColors.border} focus:outline-none focus:ring-2 ${themeColors.accentRing}`}
+                  required
+                  minLength={6}
+                  placeholder="Mínimo 6 caracteres"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className={`block ${themeColors.textSec} mb-1 text-sm font-medium`}>
+                  Confirmar Contraseña
+                </label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className={`w-full px-3 py-2 ${themeColors.bgInput} ${themeColors.textMain} rounded border ${themeColors.border} focus:outline-none focus:ring-2 ${themeColors.accentRing}`}
+                  required
+                  minLength={6}
+                  placeholder="Repite tu nueva contraseña"
+                />
+              </div>
+              {error && (
+                <div className="p-3 bg-red-900/50 text-red-200 rounded text-sm border border-red-800">
+                  {error}
+                </div>
+              )}
+              <button
+                type="submit"
+                disabled={loading}
+                className={`w-full px-4 py-2 ${themeColors.accentBg} text-white rounded ${themeColors.accentHover} disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-all`}
+              >
+                {loading ? 'Actualizando...' : 'Actualizar Contraseña'}
+              </button>
+            </form>
+          </div>
+        </div>
       </div>
     );
   }
@@ -459,9 +515,30 @@ export const Auth = ({ onAuthChange, theme }) => {
           >
             Back to Sign In
           </button>
-          <p className={`text-xs text-center ${themeColors.textMuted}`}>
-            Didn't receive the email? Check your spam folder or try signing up again.
-          </p>
+          <div className="pt-4 border-t border-slate-700">
+            <p className={`text-sm ${themeColors.textSec} mb-3`}>
+              Didn't receive the email?
+            </p>
+            {error && (
+              <div className="mb-3 p-2 bg-red-900/50 text-red-200 rounded text-sm">
+                {error}
+              </div>
+            )}
+            <button
+              onClick={handleResendVerification}
+              disabled={loading || resendCooldown > 0}
+              className={`w-full px-4 py-2 ${themeColors.bgInput} ${themeColors.textMain} rounded border ${themeColors.border} hover:${themeColors.accentBg} disabled:opacity-50`}
+            >
+              {loading
+                ? 'Sending...'
+                : resendCooldown > 0
+                ? `Resend in ${resendCooldown}s`
+                : 'Resend Verification Email'}
+            </button>
+            <p className={`text-xs text-center ${themeColors.textMuted} mt-3`}>
+              Check your spam folder if you still don't see it.
+            </p>
+          </div>
         </div>
       </div>
     );
