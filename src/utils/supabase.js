@@ -394,6 +394,11 @@ export const updateUserEmail = async (newEmail) => {
   }
 
   try {
+    // Update email - Supabase will send a confirmation email
+    // The redirect URL should be configured in Supabase Dashboard > Authentication > URL Configuration
+    // When user clicks the confirmation link, they'll be redirected back to the app
+    // The onAuthStateChange listener will detect USER_UPDATED or TOKEN_REFRESHED event
+    // and refresh the user session with the new email
     const { error } = await supabaseClient.auth.updateUser({
       email: newEmail,
     });

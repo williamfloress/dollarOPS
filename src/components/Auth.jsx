@@ -58,12 +58,13 @@ export const Auth = ({ onAuthChange, theme }) => {
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
     const type = hashParams.get('type');
     const accessToken = hashParams.get('access_token');
-    // CRITICAL: Determine flow based on type parameter first
-    // type='recovery' = password reset flow
-    // type='email' or type='signup' = email verification flow
-    // If type is null/undefined but access_token exists, it could be either, but we prioritize checking type
-    const isRecoveryFlow = type === 'recovery';
-    const isEmailVerificationFlow = type === 'email' || type === 'signup';
+      // CRITICAL: Determine flow based on type parameter first
+      // type='recovery' = password reset flow
+      // type='email' or type='signup' = email verification flow
+      // type='email_change' = email change confirmation flow
+      // If type is null/undefined but access_token exists, it could be either, but we prioritize checking type
+      const isRecoveryFlow = type === 'recovery';
+      const isEmailVerificationFlow = type === 'email' || type === 'signup' || type === 'email_change';
     
     // Set up auth state listener FIRST to catch any session creation
     // This must be set up before Supabase processes the hash
@@ -87,6 +88,63 @@ export const Auth = ({ onAuthChange, theme }) => {
         return; // Don't process this auth state change normally
       }
       
+      // CRITICAL: Handle email change confirmation
+      // When user confirms email change, Supabase fires SIGNED_IN, USER_UPDATED, or TOKEN_REFRESHED event
+      // We need to refresh the user to get the updated email
+      // Also check URL for email_change type
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const urlType = hashParams.get('type');
+      const isEmailChangeInUrl = urlType === 'email_change';
+      const message = hashParams.get('message');
+      
+      // Check if this is an email change confirmation
+      if (isEmailChangeInUrl || (message && message.includes('Confirmation link accepted'))) {
+        console.log('📧 Email change confirmation detected (type:', urlType, ', message:', message, ')');
+        // Wait a bit for Supabase to process the confirmation
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Refresh the user to get updated email
+        const { data: { user: updatedUser }, error: userError } = await supabase.auth.getUser();
+        if (updatedUser && !userError) {
+          console.log('📧 User email after confirmation:', updatedUser.email);
+          // Only update if email actually changed
+          if (session?.user && updatedUser.email !== session.user.email) {
+            console.log('📧 Email changed from', session.user.email, 'to', updatedUser.email);
+            setUser(updatedUser);
+            if (onAuthChange) onAuthChange(updatedUser);
+          } else if (!session?.user) {
+            // If no session user, update anyway
+            setUser(updatedUser);
+            if (onAuthChange) onAuthChange(updatedUser);
+          }
+          // Clear URL hash if it exists
+          setTimeout(() => {
+            if (window.location.hash) {
+              window.history.replaceState(null, '', window.location.pathname);
+            }
+          }, 500);
+          return;
+        }
+      }
+      
+      // Handle USER_UPDATED and TOKEN_REFRESHED events
+      if (event === 'USER_UPDATED' || event === 'TOKEN_REFRESHED') {
+        console.log('🔐 User updated event detected (event:', event, ') - refreshing user data');
+        // Refresh the user to get updated email
+        const { data: { user: updatedUser }, error: userError } = await supabase.auth.getUser();
+        if (updatedUser && !userError) {
+          console.log('🔐 User email after update:', updatedUser.email);
+          setUser(updatedUser);
+          if (onAuthChange) onAuthChange(updatedUser);
+          // Clear URL hash if it exists
+          setTimeout(() => {
+            if (window.location.hash) {
+              window.history.replaceState(null, '', window.location.pathname);
+            }
+          }, 500);
+        }
+        return;
+      }
+      
       // Check if we're in recovery mode (from sessionStorage or hash)
       // CRITICAL: Only check for recovery if type is 'recovery', not just if access_token exists
       // because email verification also includes access_token
@@ -94,9 +152,9 @@ export const Auth = ({ onAuthChange, theme }) => {
       const currentHashParams = new URLSearchParams(window.location.hash.substring(1));
       const currentType = currentHashParams.get('type');
       // Only treat as recovery if type is explicitly 'recovery'
-      // If type is 'email' or 'signup', it's email verification, NOT recovery
+      // If type is 'email', 'signup', or 'email_change', it's email verification/change, NOT recovery
       const isCurrentlyRecovery = currentType === 'recovery';
-      const isEmailVerificationInUrl = currentType === 'email' || currentType === 'signup';
+      const isEmailVerificationInUrl = currentType === 'email' || currentType === 'signup' || currentType === 'email_change';
       
       // CRITICAL: If this is email verification, clear any recovery mode flags
       // and allow normal login flow
@@ -140,12 +198,16 @@ export const Auth = ({ onAuthChange, theme }) => {
       };
     }
 
-    // Handle email verification flow
-    // This handles type='email' or type='signup' which are email verification flows
+    // Handle email verification/change flow
+    // This handles type='email', type='signup', or type='email_change' which are email verification/change flows
     // These should NOT be treated as recovery, even if they have access_token
-    // When email is verified, Supabase creates a session automatically - we should allow the user in
+    // When email is verified/changed, Supabase creates a session automatically - we should allow the user in
     if (isEmailVerificationFlow) {
-      console.log('🔐 Email verification token detected (type=' + type + ')');
+      console.log('🔐 Email verification/change token detected (type=' + type + ')');
+      // For email_change, we need to refresh the user to get the updated email
+      if (type === 'email_change') {
+        console.log('📧 Email change confirmation detected - will refresh user after confirmation');
+      }
       // Wait for Supabase to process the token and create a session
       // The auth state listener will handle setting the user when the session is created
       // Just clear the URL hash so it doesn't interfere

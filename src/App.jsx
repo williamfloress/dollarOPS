@@ -1015,13 +1015,13 @@ export default function TradingJournalApp() {
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
       const type = hashParams.get('type');
       const isRecoveryFlow = type === 'recovery';
-      const isEmailVerificationFlow = type === 'email' || type === 'signup';
+      const isEmailVerificationFlow = type === 'email' || type === 'signup' || type === 'email_change';
       
       // CRITICAL: Only mark recovery mode if type is explicitly 'recovery'
       // Email verification also has access_token, so we must check type first
       // If it's email verification, clear any recovery mode flags
       if (isEmailVerificationFlow) {
-        console.log('🔐 Email verification detected in URL during mount - clearing recovery mode');
+        console.log('🔐 Email verification/change detected in URL during mount - clearing recovery mode');
         sessionStorage.removeItem('password_recovery_mode');
       } else if (isRecoveryFlow) {
         console.log('🔐 Recovery token detected in URL during mount - marking recovery mode');
@@ -1055,12 +1055,12 @@ export default function TradingJournalApp() {
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
       const type = hashParams.get('type');
       const isRecoveryFlow = type === 'recovery';
-      const isEmailVerificationFlow = type === 'email' || type === 'signup';
+      const isEmailVerificationFlow = type === 'email' || type === 'signup' || type === 'email_change';
       
       // CRITICAL: Only mark recovery mode if type is explicitly 'recovery'
       // Email verification also has access_token, so we must check type first
       if (isEmailVerificationFlow) {
-        console.log('🔐 Email verification detected in URL hash change - clearing recovery mode');
+        console.log('🔐 Email verification/change detected in URL hash change - clearing recovery mode');
         sessionStorage.removeItem('password_recovery_mode');
         // Don't clear user - let them log in automatically
       } else if (isRecoveryFlow) {
