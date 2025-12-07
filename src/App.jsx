@@ -417,23 +417,824 @@ const Select = ({ label, value, onChange, options, theme }) => {
 };
 
 // --- Componentes Gráficos ---
-const DonutChart = ({ wins, losses, size = 60, theme }) => {
-  const total = wins + losses;
+const DonutChart = ({ wins, losses, breakEven = 0, size = 60, theme }) => {
+  const total = wins + losses + breakEven;
   const winPercentage = total > 0 ? (wins / total) * 100 : 0;
+  const lossPercentage = total > 0 ? (losses / total) * 100 : 0;
+  const breakEvenPercentage = total > 0 ? (breakEven / total) * 100 : 0;
   const radius = 15.9155;
   const safeWinPercentage = isNaN(winPercentage) ? 0 : winPercentage;
+  const safeLossPercentage = isNaN(lossPercentage) ? 0 : lossPercentage;
+  const safeBreakEvenPercentage = isNaN(breakEvenPercentage) ? 0 : breakEvenPercentage;
+  
+  // Calcular offsets para los círculos
+  const winOffset = 0;
+  const lossOffset = -safeWinPercentage;
+  const breakEvenOffset = -(safeWinPercentage + safeLossPercentage);
   
   return (
     <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
       <svg viewBox="0 0 40 40" className="transform -rotate-90 w-full h-full">
+        {/* Círculo base (fondo) */}
         <circle cx="20" cy="20" r={radius} fill="transparent" stroke="currentColor" className="text-slate-700 opacity-30" strokeWidth="5" />
-        <circle cx="20" cy="20" r={radius} fill="transparent" stroke="#10B981" strokeWidth="5" strokeDasharray={`${safeWinPercentage} 100`} strokeDashoffset="0" className="transition-all duration-1000 ease-out" />
-        {losses > 0 && <circle cx="20" cy="20" r={radius} fill="transparent" stroke="#F43F5E" strokeWidth="5" strokeDasharray={`${100 - safeWinPercentage} 100`} strokeDashoffset={-safeWinPercentage} className="transition-all duration-1000 ease-out" />}
+        
+        {/* Wins (verde) */}
+        {wins > 0 && (
+          <circle 
+            cx="20" 
+            cy="20" 
+            r={radius} 
+            fill="transparent" 
+            stroke="#10B981" 
+            strokeWidth="5" 
+            strokeDasharray={`${safeWinPercentage} 100`} 
+            strokeDashoffset={winOffset} 
+            className="transition-all duration-1000 ease-out" 
+          />
+        )}
+        
+        {/* Losses (rojo) */}
+        {losses > 0 && (
+          <circle 
+            cx="20" 
+            cy="20" 
+            r={radius} 
+            fill="transparent" 
+            stroke="#F43F5E" 
+            strokeWidth="5" 
+            strokeDasharray={`${safeLossPercentage} 100`} 
+            strokeDashoffset={lossOffset} 
+            className="transition-all duration-1000 ease-out" 
+          />
+        )}
+        
+        {/* Break Even (amarillo) */}
+        {breakEven > 0 && (
+          <circle 
+            cx="20" 
+            cy="20" 
+            r={radius} 
+            fill="transparent" 
+            stroke="#EAB308" 
+            strokeWidth="5" 
+            strokeDasharray={`${safeBreakEvenPercentage} 100`} 
+            strokeDashoffset={breakEvenOffset} 
+            className="transition-all duration-1000 ease-out" 
+          />
+        )}
       </svg>
-      <div className={clsx("absolute inset-0 flex items-center justify-center text-[10px] font-bold", theme.textSec)}>
+      <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
         {Math.round(safeWinPercentage)}%
       </div>
     </div>
+  );
+};
+
+const PieChartComponent = ({ wins, losses, breakEven = 0, size = 60, theme }) => {
+  const total = wins + losses + breakEven;
+  const winPercentage = total > 0 ? (wins / total) * 100 : 0;
+  const lossPercentage = total > 0 ? (losses / total) * 100 : 0;
+  const breakEvenPercentage = total > 0 ? (breakEven / total) * 100 : 0;
+  const radius = 20;
+  const safeWinPercentage = isNaN(winPercentage) ? 0 : winPercentage;
+  const safeLossPercentage = isNaN(lossPercentage) ? 0 : lossPercentage;
+  const safeBreakEvenPercentage = isNaN(breakEvenPercentage) ? 0 : breakEvenPercentage;
+  
+  // Calcular los ángulos para cada segmento
+  const winAngle = (safeWinPercentage / 100) * 360;
+  const lossAngle = (safeLossPercentage / 100) * 360;
+  const breakEvenAngle = (safeBreakEvenPercentage / 100) * 360;
+  
+  const createArc = (startAngle, endAngle) => {
+    const start = (startAngle - 90) * (Math.PI / 180);
+    const end = (endAngle - 90) * (Math.PI / 180);
+    const x1 = 20 + radius * Math.cos(start);
+    const y1 = 20 + radius * Math.sin(start);
+    const x2 = 20 + radius * Math.cos(end);
+    const y2 = 20 + radius * Math.sin(end);
+    const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+    return `M 20 20 L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+  };
+  
+  return (
+    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+      <svg viewBox="0 0 40 40" className="w-full h-full">
+        {/* Wins slice (verde) */}
+        {wins > 0 && (
+          <path
+            d={createArc(0, winAngle)}
+            fill="#10B981"
+            className="transition-all duration-1000 ease-out"
+          />
+        )}
+        {/* Losses slice (rojo) */}
+        {losses > 0 && (
+          <path
+            d={createArc(winAngle, winAngle + lossAngle)}
+            fill="#F43F5E"
+            className="transition-all duration-1000 ease-out"
+          />
+        )}
+        {/* Break Even slice (amarillo) */}
+        {breakEven > 0 && (
+          <path
+            d={createArc(winAngle + lossAngle, winAngle + lossAngle + breakEvenAngle)}
+            fill="#EAB308"
+            className="transition-all duration-1000 ease-out"
+          />
+        )}
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+        {Math.round(safeWinPercentage)}%
+      </div>
+    </div>
+  );
+};
+
+const BarChart = ({ wins, losses, size = 120, theme }) => {
+  const total = wins + losses;
+  const maxValue = Math.max(wins, losses, 1);
+  const winHeight = total > 0 ? (wins / maxValue) * 100 : 0;
+  const lossHeight = total > 0 ? (losses / maxValue) * 100 : 0;
+  const barWidth = 35;
+  const chartHeight = 80;
+  const chartWidth = 100;
+  const centerY = chartHeight / 2;
+  const padding = 10;
+  const availableHeight = centerY - padding;
+  
+  return (
+    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+      <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-full">
+        {/* Center line (zero axis) */}
+        <line 
+          x1={padding} 
+          y1={centerY} 
+          x2={chartWidth - padding} 
+          y2={centerY} 
+          stroke="currentColor" 
+          className={clsx(theme.textSec)} 
+          strokeWidth="1.5" 
+          opacity="0.3" 
+        />
+        
+        {/* Wins bar (positive, going up from center) */}
+        {wins > 0 && (
+          <g>
+            <rect
+              x={padding + 5}
+              y={centerY - (winHeight * availableHeight / 100)}
+              width={barWidth}
+              height={winHeight * availableHeight / 100}
+              fill="#10B981"
+              className="transition-all duration-500 ease-out"
+              rx="3"
+            />
+            <text
+              x={padding + 5 + barWidth / 2}
+              y={centerY - (winHeight * availableHeight / 100) - 6}
+              textAnchor="middle"
+              className={clsx("text-[9px] font-bold fill-current", "fill-emerald-400")}
+            >
+              {wins}
+            </text>
+          </g>
+        )}
+        
+        {/* Losses bar (negative, going down from center) */}
+        {losses > 0 && (
+          <g>
+            <rect
+              x={chartWidth - padding - barWidth - 5}
+              y={centerY}
+              width={barWidth}
+              height={lossHeight * availableHeight / 100}
+              fill="#F43F5E"
+              className="transition-all duration-500 ease-out"
+              rx="3"
+            />
+            <text
+              x={chartWidth - padding - barWidth - 5 + barWidth / 2}
+              y={centerY + (lossHeight * availableHeight / 100) + 12}
+              textAnchor="middle"
+              className={clsx("text-[9px] font-bold fill-current", "fill-rose-400")}
+            >
+              {losses}
+            </text>
+          </g>
+        )}
+        
+        {/* Labels */}
+        <text 
+          x={padding + 5 + barWidth / 2} 
+          y={chartHeight - 3} 
+          textAnchor="middle" 
+          className={clsx("text-[9px] fill-current font-medium", theme.textSec)}
+        >
+          Wins
+        </text>
+        <text 
+          x={chartWidth - padding - barWidth - 5 + barWidth / 2} 
+          y={chartHeight - 3} 
+          textAnchor="middle" 
+          className={clsx("text-[9px] fill-current font-medium", theme.textSec)}
+        >
+          Losses
+        </text>
+      </svg>
+    </div>
+  );
+};
+
+// Gráfico de barras múltiples para semanas o meses
+const MultiBarChart = ({ dataArray, labels, theme, type = 'week' }) => {
+  const chartHeight = 200;
+  const itemCount = dataArray.length;
+  const chartWidth = type === 'week' ? Math.max(400, itemCount * 80) : Math.max(600, itemCount * 50);
+  const padding = 40;
+  const barSpacing = type === 'week' ? 80 : 50;
+  const barWidth = type === 'week' ? 30 : 20;
+  const availableWidth = chartWidth - padding * 2;
+  const availableHeight = chartHeight - padding * 2;
+  
+  // Calcular el valor máximo para escalar las barras
+  const maxValue = Math.max(...dataArray.map(d => Math.max(d.wins || 0, d.losses || 0)), 1);
+  
+  return (
+    <div className="w-full overflow-x-auto">
+      <svg viewBox={`0 0 ${chartWidth} ${chartHeight + 50}`} className="w-full" style={{ minHeight: chartHeight + 50 }}>
+        {/* Eje Y (valores) */}
+        <line 
+          x1={padding} 
+          y1={padding} 
+          x2={padding} 
+          y2={chartHeight - padding} 
+          stroke="currentColor" 
+          className={clsx(theme.textSec)} 
+          strokeWidth="2" 
+          opacity="0.3" 
+        />
+        
+        {/* Eje X (categorías) */}
+        <line 
+          x1={padding} 
+          y1={chartHeight - padding} 
+          x2={chartWidth - padding} 
+          y2={chartHeight - padding} 
+          stroke="currentColor" 
+          className={clsx(theme.textSec)} 
+          strokeWidth="2" 
+          opacity="0.3" 
+        />
+        
+        {/* Líneas de referencia horizontales */}
+        {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
+          const y = chartHeight - padding - (ratio * availableHeight);
+          return (
+            <line
+              key={i}
+              x1={padding}
+              y1={y}
+              x2={chartWidth - padding}
+              y2={y}
+              stroke="currentColor"
+              className={clsx(theme.textSec)}
+              strokeWidth="1"
+              opacity="0.1"
+              strokeDasharray="4 4"
+            />
+          );
+        })}
+        
+        {/* Barras */}
+        {dataArray.map((data, index) => {
+          const x = padding + (index * barSpacing) + (barSpacing / 2) - barWidth;
+          const winHeight = ((data.wins || 0) / maxValue) * availableHeight;
+          const lossHeight = ((data.losses || 0) / maxValue) * availableHeight;
+          const winY = chartHeight - padding - winHeight;
+          const lossY = chartHeight - padding;
+          
+          return (
+            <g key={index}>
+              {/* Barra de Wins */}
+              {(data.wins || 0) > 0 && (
+                <g>
+                  <rect
+                    x={x}
+                    y={winY}
+                    width={barWidth}
+                    height={winHeight}
+                    fill="#10B981"
+                    className="transition-all duration-500 ease-out"
+                    rx="3"
+                  />
+                  <text
+                    x={x + barWidth / 2}
+                    y={winY - 5}
+                    textAnchor="middle"
+                    className={clsx("text-[10px] font-bold fill-current", "fill-emerald-400")}
+                  >
+                    {data.wins}
+                  </text>
+                </g>
+              )}
+              
+              {/* Barra de Losses */}
+              {(data.losses || 0) > 0 && (
+                <g>
+                  <rect
+                    x={x + barWidth + 3}
+                    y={lossY - lossHeight}
+                    width={barWidth}
+                    height={lossHeight}
+                    fill="#F43F5E"
+                    className="transition-all duration-500 ease-out"
+                    rx="3"
+                  />
+                  <text
+                    x={x + barWidth + 3 + barWidth / 2}
+                    y={lossY - lossHeight - 5}
+                    textAnchor="middle"
+                    className={clsx("text-[10px] font-bold fill-current", "fill-rose-400")}
+                  >
+                    {data.losses}
+                  </text>
+                </g>
+              )}
+              
+              {/* Etiqueta del eje X */}
+              <text
+                x={x + barWidth + 1.5}
+                y={chartHeight - padding + 20}
+                textAnchor="middle"
+                className={clsx("text-[10px] fill-current font-medium", theme.textSec)}
+              >
+                {labels[index] || `Item ${index + 1}`}
+              </text>
+            </g>
+          );
+        })}
+        
+        {/* Leyenda */}
+        <g transform={`translate(${Math.min(chartWidth - padding - 80, chartWidth - 100)}, ${padding})`}>
+          <rect x="0" y="0" width="12" height="12" fill="#10B981" rx="2" />
+          <text x="16" y="10" className={clsx("text-[10px] fill-current", theme.textSec)}>Wins</text>
+          <rect x="0" y="18" width="12" height="12" fill="#F43F5E" rx="2" />
+          <text x="16" y="28" className={clsx("text-[10px] fill-current", theme.textSec)}>Losses</text>
+        </g>
+      </svg>
+    </div>
+  );
+};
+
+const LineChart = ({ wins, losses, size = 120, theme }) => {
+  const total = wins + losses;
+  const maxValue = Math.max(wins, losses, 1);
+  const chartHeight = 80;
+  const chartWidth = 100;
+  const padding = 10;
+  const winY = chartHeight - padding - ((wins / maxValue) * (chartHeight - padding * 2));
+  const lossY = chartHeight - padding - ((losses / maxValue) * (chartHeight - padding * 2));
+  
+  return (
+    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+      <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-full">
+        {/* Grid lines */}
+        <line x1={padding} y1={chartHeight / 2} x2={chartWidth - padding} y2={chartHeight / 2} stroke="currentColor" className={clsx(theme.textSec)} strokeWidth="1" opacity="0.2" />
+        <line x1={padding} y1={padding} x2={chartWidth - padding} y2={padding} stroke="currentColor" className={clsx(theme.textSec)} strokeWidth="1" opacity="0.1" />
+        <line x1={padding} y1={chartHeight - padding} x2={chartWidth - padding} y2={chartHeight - padding} stroke="currentColor" className={clsx(theme.textSec)} strokeWidth="1" opacity="0.1" />
+        
+        {/* Line connecting wins and losses */}
+        {total > 0 && (
+          <line
+            x1={padding + 20}
+            y1={winY}
+            x2={chartWidth - padding - 20}
+            y2={lossY}
+            stroke="currentColor"
+            className={clsx(theme.textSec)}
+            strokeWidth="2"
+            opacity="0.3"
+            strokeDasharray="4 4"
+          />
+        )}
+        
+        {/* Wins point and line */}
+        {wins > 0 && (
+          <g>
+            <circle
+              cx={padding + 20}
+              cy={winY}
+              r="5"
+              fill="#10B981"
+              className="transition-all duration-500 ease-out"
+            />
+            <line
+              x1={padding + 20}
+              y1={chartHeight - padding}
+              x2={padding + 20}
+              y2={winY}
+              stroke="#10B981"
+              strokeWidth="3"
+              className="transition-all duration-500 ease-out"
+              opacity="0.6"
+            />
+            <text
+              x={padding + 20}
+              y={winY - 8}
+              textAnchor="middle"
+              className={clsx("text-[8px] font-bold fill-current", theme.textMain)}
+            >
+              {wins}
+            </text>
+          </g>
+        )}
+        
+        {/* Losses point and line */}
+        {losses > 0 && (
+          <g>
+            <circle
+              cx={chartWidth - padding - 20}
+              cy={lossY}
+              r="5"
+              fill="#F43F5E"
+              className="transition-all duration-500 ease-out"
+            />
+            <line
+              x1={chartWidth - padding - 20}
+              y1={chartHeight - padding}
+              x2={chartWidth - padding - 20}
+              y2={lossY}
+              stroke="#F43F5E"
+              strokeWidth="3"
+              className="transition-all duration-500 ease-out"
+              opacity="0.6"
+            />
+            <text
+              x={chartWidth - padding - 20}
+              y={lossY - 8}
+              textAnchor="middle"
+              className={clsx("text-[8px] font-bold fill-current", theme.textMain)}
+            >
+              {losses}
+            </text>
+          </g>
+        )}
+        
+        {/* Labels */}
+        <text x={padding + 20} y={chartHeight - 2} textAnchor="middle" className={clsx("text-[8px] fill-current", theme.textSec)}>Wins</text>
+        <text x={chartWidth - padding - 20} y={chartHeight - 2} textAnchor="middle" className={clsx("text-[8px] fill-current", theme.textSec)}>Losses</text>
+      </svg>
+    </div>
+  );
+};
+
+// --- Componente de Vista de Métricas ---
+const MetricsView = ({ metrics, theme, accountBalance, showMetricsAsPercentage, chartType, onChartTypeChange, currentDate }) => {
+  const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  const [selectedPeriod, setSelectedPeriod] = useState(null); // { type: 'week'|'month', index: number, label: string, data: object }
+  
+  // Card completo para el año
+  const MetricCard = ({ label, data, period }) => {
+    const isPositive = data.val >= 0;
+    const percentage = accountBalance > 0 ? ((data.val / accountBalance) * 100) : 0;
+    const total = data.wins + data.losses + (data.breakEven || 0);
+    const winPercentage = total > 0 ? (data.wins / total) * 100 : 0;
+    
+    const renderChart = () => {
+      switch (chartType) {
+        case 'bar':
+          return <BarChart wins={data.wins} losses={data.losses} size={120} theme={theme} />;
+        case 'pie':
+          return <PieChartComponent wins={data.wins} losses={data.losses} breakEven={data.breakEven || 0} size={120} theme={theme} />;
+        case 'donut':
+        default:
+          return <DonutChart wins={data.wins} losses={data.losses} breakEven={data.breakEven || 0} size={120} theme={theme} />;
+      }
+    };
+    
+    return (
+      <div className={clsx(`${theme.bgCard} border ${theme.border} rounded-xl p-4 sm:p-6 flex flex-col items-center gap-4`)}>
+        <div className="text-center">
+          <h3 className={clsx("text-sm font-bold uppercase tracking-wider mb-2", theme.textSec)}>{label}</h3>
+          {showMetricsAsPercentage && accountBalance > 0 ? (
+            <div className={clsx("text-2xl sm:text-3xl font-mono font-bold", isPositive ? 'text-emerald-400' : 'text-rose-400')}>
+              {isPositive ? '+' : ''}{percentage.toFixed(1)}%
+            </div>
+          ) : (
+            <div className={clsx("text-2xl sm:text-3xl font-mono font-bold", isPositive ? 'text-emerald-400' : 'text-rose-400')}>
+              {isPositive ? '+' : ''}{data.val.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}$
+            </div>
+          )}
+          <div className={clsx("text-xs mt-1", theme.textMuted)}>{data.count} trades</div>
+        </div>
+        
+        {total > 0 ? (
+          <>
+            {renderChart()}
+            <div className="w-full space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+                  <span className={theme.textSec}>Wins</span>
+                </div>
+                <span className={clsx("font-bold", theme.textMain)}>{data.wins}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-rose-500"></div>
+                  <span className={theme.textSec}>Losses</span>
+                </div>
+                <span className={clsx("font-bold", theme.textMain)}>{data.losses}</span>
+              </div>
+              {(data.breakEven || 0) > 0 && (
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                    <span className={theme.textSec}>Break Even</span>
+                  </div>
+                  <span className={clsx("font-bold", theme.textMain)}>{data.breakEven || 0}</span>
+                </div>
+              )}
+              <div className={clsx("pt-2 mt-2 border-t", theme.borderSec, "flex justify-between items-center text-xs")}>
+                <span className={theme.textMuted}>Win Rate</span>
+                <span className={clsx("font-bold", theme.textMain)}>{winPercentage.toFixed(1)}%</span>
+              </div>
+              <div className={clsx("flex justify-between items-center text-xs", theme.borderSec)}>
+                <span className={theme.textMuted}>Profit Factor</span>
+                <span className={clsx("font-bold font-mono", theme.textMain)}>
+                  {data.losses === 0 ? '∞' : Math.abs(data.wins / data.losses).toFixed(2)}
+                </span>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className={clsx("text-center py-8", theme.textMuted)}>
+            <PieChart size={48} className="mx-auto mb-2 opacity-40" />
+            <p className="text-xs">Sin datos para este período</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Card compacto clickeable para semanas y meses (solo donut/pie)
+  const ClickableChart = ({ label, data, index, type }) => {
+    const total = data.wins + data.losses + (data.breakEven || 0);
+    
+    const renderChart = () => {
+      switch (chartType) {
+        case 'pie':
+          return <PieChartComponent wins={data.wins} losses={data.losses} breakEven={data.breakEven || 0} size={80} theme={theme} />;
+        case 'donut':
+        default:
+          return <DonutChart wins={data.wins} losses={data.losses} breakEven={data.breakEven || 0} size={80} theme={theme} />;
+      }
+    };
+    
+    if (total === 0) {
+      return (
+        <div className={clsx("flex flex-col items-center gap-2 opacity-40")}>
+          <h4 className={clsx("text-xs font-bold uppercase tracking-wider", theme.textSec)}>{label}</h4>
+          <PieChart size={60} className="opacity-40" />
+        </div>
+      );
+    }
+    
+    return (
+      <div 
+        className={clsx(
+          "flex flex-col items-center gap-2 cursor-pointer transition-transform hover:scale-105",
+          "lg:min-w-[100px]"
+        )}
+        onClick={() => setSelectedPeriod({ type, index, label, data })}
+      >
+        <h4 className={clsx("text-xs lg:text-sm font-bold uppercase tracking-wider", theme.textSec)}>{label}</h4>
+        {renderChart()}
+      </div>
+    );
+  };
+  
+  // Modal de detalles
+  const DetailModal = () => {
+    if (!selectedPeriod) return null;
+    
+    const { type, label, data } = selectedPeriod;
+    const isPositive = data.val >= 0;
+    const percentage = accountBalance > 0 ? ((data.val / accountBalance) * 100) : 0;
+    const total = data.wins + data.losses + (data.breakEven || 0);
+    const winPercentage = total > 0 ? (data.wins / total) * 100 : 0;
+    
+    return (
+      <div 
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300"
+        onClick={() => setSelectedPeriod(null)}
+      >
+        <div 
+          className={clsx(
+            "w-full max-w-md p-6 rounded-xl shadow-2xl border",
+            theme.bgCard, theme.border,
+            "transform transition-all scale-100 mx-4"
+          )}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h3 className={clsx("text-xl font-bold", theme.textMain)}>{label}</h3>
+            <button
+              onClick={() => setSelectedPeriod(null)}
+              className={clsx("p-2 rounded-lg hover:bg-opacity-20", theme.bgHover)}
+            >
+              <X size={20} className={theme.textSec} />
+            </button>
+          </div>
+          
+          <div className="space-y-4">
+            {/* Valor total */}
+            <div className="text-center">
+              {showMetricsAsPercentage && accountBalance > 0 ? (
+                <div className={clsx("text-3xl font-mono font-bold", isPositive ? 'text-emerald-400' : 'text-rose-400')}>
+                  {isPositive ? '+' : ''}{percentage.toFixed(1)}%
+                </div>
+              ) : (
+                <div className={clsx("text-3xl font-mono font-bold", isPositive ? 'text-emerald-400' : 'text-rose-400')}>
+                  {isPositive ? '+' : ''}{data.val.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}$
+                </div>
+              )}
+              <div className={clsx("text-sm mt-1", theme.textMuted)}>{data.count} trades</div>
+            </div>
+            
+            {/* Chart grande */}
+            <div className="flex justify-center">
+              {chartType === 'pie' ? (
+                <PieChartComponent wins={data.wins} losses={data.losses} breakEven={data.breakEven || 0} size={150} theme={theme} />
+              ) : (
+                <DonutChart wins={data.wins} losses={data.losses} breakEven={data.breakEven || 0} size={150} theme={theme} />
+              )}
+            </div>
+            
+            {/* Detalles */}
+            <div className={clsx("space-y-3 pt-4 border-t", theme.borderSec)}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+                  <span className={theme.textSec}>Wins</span>
+                </div>
+                <span className={clsx("font-bold text-lg", theme.textMain)}>{data.wins}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-rose-500"></div>
+                  <span className={theme.textSec}>Losses</span>
+                </div>
+                <span className={clsx("font-bold text-lg", theme.textMain)}>{data.losses}</span>
+              </div>
+              {(data.breakEven || 0) > 0 && (
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                    <span className={theme.textSec}>Break Even</span>
+                  </div>
+                  <span className={clsx("font-bold text-lg", theme.textMain)}>{data.breakEven || 0}</span>
+                </div>
+              )}
+              <div className={clsx("pt-3 mt-3 border-t", theme.borderSec, "flex justify-between items-center")}>
+                <span className={theme.textMuted}>Win Rate</span>
+                <span className={clsx("font-bold text-lg", theme.textMain)}>{winPercentage.toFixed(1)}%</span>
+              </div>
+              <div className={clsx("flex justify-between items-center")}>
+                <span className={theme.textMuted}>Profit Factor</span>
+                <span className={clsx("font-bold font-mono text-lg", theme.textMain)}>
+                  {data.losses === 0 ? '∞' : Math.abs(data.wins / data.losses).toFixed(2)}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <>
+      {/* Chart Type Selector */}
+      <div className={clsx("p-3 sm:p-4 border-b", theme.borderSec, "flex items-center justify-center gap-3", theme.bgSec)}>
+        <span className={clsx("text-xs font-semibold uppercase tracking-wider", theme.textSec)}>Tipo:</span>
+        <div className={clsx("flex gap-1 p-1 rounded-lg border", theme.border)}>
+          <button
+            onClick={() => onChartTypeChange('donut')}
+            className={clsx(
+              "px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5",
+              chartType === 'donut'
+                ? `${theme.accentBg} text-white shadow-md`
+                : `${theme.bgCard} ${theme.textSec} hover:${theme.bgHover}`
+            )}
+            title="Gráfico Donut"
+          >
+            <PieChart size={14} />
+            <span className="hidden sm:inline">Donut</span>
+          </button>
+          <button
+            onClick={() => onChartTypeChange('pie')}
+            className={clsx(
+              "px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5",
+              chartType === 'pie'
+                ? `${theme.accentBg} text-white shadow-md`
+                : `${theme.bgCard} ${theme.textSec} hover:${theme.bgHover}`
+            )}
+            title="Gráfico Pie"
+          >
+            <PieChart size={14} />
+            <span className="hidden sm:inline">Pie</span>
+          </button>
+          <button
+            onClick={() => onChartTypeChange('bar')}
+            className={clsx(
+              "px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5",
+              chartType === 'bar'
+                ? `${theme.accentBg} text-white shadow-md`
+                : `${theme.bgCard} ${theme.textSec} hover:${theme.bgHover}`
+            )}
+            title="Gráfico de Barras"
+          >
+            <BarChart3 size={14} />
+            <span className="hidden sm:inline">Barras</span>
+          </button>
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-6">
+        {/* Semanal */}
+        <div>
+          <h3 className={clsx("text-sm font-bold uppercase tracking-wider mb-4", theme.textSec)}>Semanal</h3>
+          {chartType === 'bar' ? (
+            // Gráfico de barras múltiples para todas las semanas
+            <div className={clsx(theme.bgCard, "border", theme.border, "rounded-xl p-4")}>
+              <MultiBarChart 
+                dataArray={metrics.weeklyStats || []}
+                labels={(metrics.weeklyStats || []).map((_, i) => `Semana ${i + 1}`)}
+                theme={theme}
+                type="week"
+              />
+            </div>
+          ) : (
+            // Donas/Pies clickeables sin contenedores
+            <div className={clsx(
+              "flex flex-wrap justify-center gap-6 lg:gap-8",
+              "px-2"
+            )}>
+              {(metrics.weeklyStats || []).map((weekData, index) => (
+                <ClickableChart 
+                  key={index}
+                  label={`Semana ${index + 1}`} 
+                  data={weekData} 
+                  index={index}
+                  type="week"
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Mensual */}
+        <div>
+          <h3 className={clsx("text-sm font-bold uppercase tracking-wider mb-4", theme.textSec)}>Mensual</h3>
+          {chartType === 'bar' ? (
+            // Gráfico de barras múltiples para todos los meses
+            <div className={clsx(theme.bgCard, "border", theme.border, "rounded-xl p-4")}>
+              <MultiBarChart 
+                dataArray={metrics.monthlyStats || []}
+                labels={monthNames}
+                theme={theme}
+                type="month"
+              />
+            </div>
+          ) : (
+            // Donas/Pies clickeables sin contenedores
+            <div className={clsx(
+              "flex flex-wrap justify-center gap-6 lg:gap-8",
+              "px-2"
+            )}>
+              {(metrics.monthlyStats || []).map((monthData, index) => (
+                <ClickableChart 
+                  key={index}
+                  label={monthNames[index]} 
+                  data={monthData} 
+                  index={index}
+                  type="month"
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Anual - 1 solo chart */}
+        <div>
+          <MetricCard label="Anual" data={metrics.annual} period="annual" />
+        </div>
+      </div>
+      
+      {/* Modal de detalles */}
+      <DetailModal />
+    </>
   );
 };
 
@@ -461,7 +1262,7 @@ const HeaderMetric = ({ label, data, theme, showAsPercentage = false, accountBal
             <span className={clsx("text-xs", theme.bgCard, "px-2 py-1 rounded", theme.textSec)}>{data.count} Trades</span>
           </div>
           <div className="flex items-center gap-6 justify-center">
-             <div className="flex-shrink-0"><DonutChart wins={data.wins} losses={data.losses} size={70} theme={theme} /></div>
+             <div className="flex-shrink-0"><DonutChart wins={data.wins} losses={data.losses} breakEven={data.breakEven || 0} size={70} theme={theme} /></div>
              <div className="flex flex-col gap-2 text-xs w-full">
                 <div className="flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500"></div><span className={theme.textSec}>Wins</span></div><span className="text-emerald-400 font-bold">{data.wins}</span></div>
                 <div className="flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-rose-500"></div><span className={theme.textSec}>Losses</span></div><span className="text-rose-400 font-bold">{data.losses}</span></div>
@@ -487,6 +1288,37 @@ const getWeekNumber = (d) => {
   d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
   var yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
   return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+};
+
+// Obtener el número de semana dentro del mes (1-5)
+// Considera que la semana comienza en domingo (0)
+const getWeekInMonth = (date) => {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const day = date.getDate();
+  const firstDay = new Date(year, month, 1);
+  const firstDayWeek = firstDay.getDay(); // 0 = domingo, 6 = sábado
+  // Calcular en qué semana del mes cae este día
+  // Sumamos firstDayWeek para ajustar el inicio de la semana
+  const weekNumber = Math.ceil((day + firstDayWeek) / 7);
+  // Asegurar que el número de semana esté en el rango válido (1-5)
+  return Math.max(1, Math.min(5, weekNumber));
+};
+
+// Obtener el rango de fechas de una semana específica del mes
+const getWeekRangeInMonth = (year, month, weekNum) => {
+  const firstDay = new Date(year, month, 1);
+  const firstDayWeek = firstDay.getDay();
+  const startDate = new Date(year, month, 1 + (weekNum - 1) * 7 - firstDayWeek);
+  const endDate = new Date(year, month, Math.min(startDate.getDate() + 6, getDaysInMonth(year, month)));
+  return { start: startDate, end: endDate };
+};
+
+// Obtener el número de semanas en un mes (4 o 5)
+const getWeeksInMonth = (year, month) => {
+  const daysInMonth = getDaysInMonth(year, month);
+  const firstDay = getFirstDayOfMonth(year, month);
+  return Math.ceil((daysInMonth + firstDay) / 7);
 };
 
 // --- HOOK DE PERSISTENCIA (Local Storage) ---
@@ -877,6 +1709,8 @@ export default function TradingJournalApp() {
   const [slideshowAnimation, setSlideshowAnimation] = useStickyState('smooth', 'journal_slideshow_animation_v1'); // 'smooth' or 'plain'
   const [customDuration, setCustomDuration] = useState('');
   const [durationMode, setDurationMode] = useState('preset'); // 'preset' or 'custom'
+  const [showMetricsView, setShowMetricsView] = useState(false); // Toggle between vision board and metrics view
+  const [chartType, setChartType] = useStickyState('donut', 'journal_metrics_chart_type_v1'); // Chart type: 'donut', 'pie', 'bar'
   const [showMetricsAsPercentage, setShowMetricsAsPercentage] = useState(false);
   const [themeTypeFilter, setThemeTypeFilter] = useState(() => {
     // Initialize based on current theme type
@@ -1096,6 +1930,11 @@ export default function TradingJournalApp() {
     const currentMonth = currentDate.getMonth();
     const createStat = () => ({ val: 0, count: 0, wins: 0, losses: 0, breakEven: 0, winRate: 0 });
     const stats = { daily: createStat(), weekly: createStat(), monthly: createStat(), annual: createStat(), global: createStat() };
+    
+    // Inicializar arrays para semanas del mes y meses del año
+    const weeksInMonth = getWeeksInMonth(currentYear, currentMonth);
+    const weeklyStats = Array.from({ length: weeksInMonth }, () => createStat());
+    const monthlyStats = Array.from({ length: 12 }, () => createStat());
 
     entries.forEach(entry => {
       // Skip non-trading entries (thoughts, dayoff) - these are visual only
@@ -1123,19 +1962,46 @@ export default function TradingJournalApp() {
       updateStat(stats.global);
       if (entryDate.getFullYear() === currentYear) {
         updateStat(stats.annual);
-        if (entryDate.getMonth() === currentMonth) updateStat(stats.monthly);
+        
+        // Actualizar estadísticas mensuales (12 meses)
+        const entryMonth = entryDate.getMonth();
+        updateStat(monthlyStats[entryMonth]);
+        
+        if (entryDate.getMonth() === currentMonth) {
+          updateStat(stats.monthly);
+          
+          // Actualizar estadísticas semanales del mes actual
+          const weekInMonth = getWeekInMonth(entryDate);
+          if (weekInMonth >= 1 && weekInMonth <= weeksInMonth) {
+            updateStat(weeklyStats[weekInMonth - 1]);
+          }
+        }
+        
         const contextDate = selectedDate || new Date();
         if (getWeekNumber(entryDate) === getWeekNumber(contextDate)) updateStat(stats.weekly);
       }
       if (selectedDate && isSameDay(entryDate, selectedDate)) updateStat(stats.daily);
     });
 
+    // Calcular winRate para todas las estadísticas
+    const calculateWinRate = (statObj) => {
+      const totalDecisive = statObj.wins + statObj.losses;
+      statObj.winRate = totalDecisive > 0 ? (statObj.wins / totalDecisive) * 100 : 0;
+    };
+    
     Object.keys(stats).forEach(key => {
-      const s = stats[key];
-      const totalDecisive = s.wins + s.losses;
-      s.winRate = totalDecisive > 0 ? (s.wins / totalDecisive) * 100 : 0;
+      calculateWinRate(stats[key]);
     });
-    return { ...stats, currentBalance: accountBalance + stats.annual.val };
+    
+    weeklyStats.forEach(calculateWinRate);
+    monthlyStats.forEach(calculateWinRate);
+    
+    return { 
+      ...stats, 
+      weeklyStats, // Array de semanas del mes
+      monthlyStats, // Array de meses del año
+      currentBalance: accountBalance + stats.annual.val 
+    };
   }, [entries, currentDate, selectedDate, accountBalance]);
 
   // Handlers
@@ -3351,7 +4217,7 @@ export default function TradingJournalApp() {
               </div>
             </div>
           ) : (
-            <div className={`flex flex-col h-full relative transition-all duration-300 ${isDragging ? `${theme.bgCard50} border-2 ${theme.accentBorder} border-dashed` : theme.bgSec}`} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+            <div className={`flex flex-col h-full relative transition-all duration-300 ${isDragging && !showMetricsView ? `${theme.bgCard50} border-2 ${theme.accentBorder} border-dashed` : theme.bgSec}`} onDragOver={!showMetricsView ? handleDragOver : undefined} onDragLeave={!showMetricsView ? handleDragLeave : undefined} onDrop={!showMetricsView ? handleDrop : undefined}>
                <div className={`p-3 sm:p-4 border-b ${theme.borderSec} flex justify-between items-center ${theme.bgSec} sticky top-0 z-10`}>
                  <div className="flex items-center gap-2 sm:gap-3">
                    {/* Mobile: Back button */}
@@ -3364,9 +4230,25 @@ export default function TradingJournalApp() {
                      <ArrowLeft size={18} />
                    </button>
                    <h3 className={`text-sm font-bold ${theme.textSec} uppercase tracking-wider flex items-center gap-2`}>
-                     <ImageIcon size={16} className={theme.accentText} /> Vision Board
+                     {showMetricsView ? (
+                       <>
+                         <BarChart3 size={16} className={theme.accentText} /> Métricas
+                       </>
+                     ) : (
+                       <>
+                         <ImageIcon size={16} className={theme.accentText} /> Vision Board
+                       </>
+                     )}
                    </h3>
-                   {motivationalImages.length >= 3 && (
+                   {/* Toggle button */}
+                   <button
+                     onClick={() => setShowMetricsView(!showMetricsView)}
+                     className={`p-1.5 rounded-lg transition-all ${theme.bgCard} ${theme.border} border ${theme.textSec} hover:${theme.accentBg} hover:text-white`}
+                     title={showMetricsView ? "Ver Vision Board" : "Ver Métricas"}
+                   >
+                     {showMetricsView ? <ImageIcon size={14} /> : <BarChart3 size={14} />}
+                   </button>
+                   {!showMetricsView && motivationalImages.length >= 3 && (
                      <>
                        <button
                          onClick={toggleSlideshow}
@@ -3385,82 +4267,98 @@ export default function TradingJournalApp() {
                      </>
                    )}
                  </div>
-                 <div className={`text-[10px] font-bold ${theme.textMuted} ${theme.bgCard} px-2 py-1 rounded`}>{motivationalImages.length} Ítems</div>
-               </div>
-               <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4">
-                 {motivationalImages.length === 0 ? (
-                   <div className={`h-full flex flex-col items-center justify-center text-center ${theme.textMuted} opacity-60 pointer-events-none`}>
-                     <UploadCloud size={48} className="mb-4" />
-                     <p className="text-sm font-medium mb-1">Arrastra tus imágenes aquí</p>
-                     <p className="text-xs max-w-[200px]">Crea tu tablero de motivación.</p>
-                   </div>
-                 ) : isSlideshowActive && motivationalImages.length >= 3 ? (
-                   <div className="flex flex-col h-full min-h-0">
-                     <div className={`relative flex-1 min-h-[400px] rounded-xl overflow-hidden border ${theme.border} ${theme.bgCard} group`}>
-                       {motivationalImages.map((img, idx) => (
-                         <img
-                           key={img.id}
-                           src={img.src}
-                           alt={`Motivation ${idx + 1}`}
-                           className={`absolute inset-0 w-full h-full object-cover ${
-                             slideshowAnimation === 'smooth' 
-                               ? `transition-opacity duration-700 ${idx === slideshowIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`
-                               : `${idx === slideshowIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`
-                           }`}
-                           onError={(e) => {
-                             console.error('Failed to load image:', img.src?.substring(0, 50) + '...');
-                             // Image src is already set, browser will show broken image icon
-                           }}
-                         />
-                       ))}
-                       <button
-                         onClick={(e) => handleDeleteImage(motivationalImages[slideshowIndex]?.id, e)}
-                         className="absolute top-2 right-2 bg-black/50 hover:bg-red-600 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm z-20"
-                       >
-                         <X size={14} />
-                       </button>
-                       <button
-                         onClick={handleSlideshowPrev}
-                         className={`absolute left-2 top-1/2 -translate-y-1/2 ${theme.bgCard} ${theme.border} border p-2 rounded-full ${theme.textMain} hover:${theme.accentBg} hover:text-white transition-all opacity-0 group-hover:opacity-100 z-20`}
-                       >
-                         <ChevronLeft size={18} />
-                       </button>
-                       <button
-                         onClick={handleSlideshowNext}
-                         className={`absolute right-2 top-1/2 -translate-y-1/2 ${theme.bgCard} ${theme.border} border p-2 rounded-full ${theme.textMain} hover:${theme.accentBg} hover:text-white transition-all opacity-0 group-hover:opacity-100 z-20`}
-                       >
-                         <ChevronRight size={18} />
-                       </button>
-                       <div className={`absolute bottom-4 left-1/2 -translate-x-1/2 ${theme.bgCard}/80 backdrop-blur-sm px-3 py-1.5 rounded-full border ${theme.border} opacity-0 group-hover:opacity-100 transition-opacity z-20`}>
-                         <span className={`text-xs font-bold ${theme.textMain}`}>
-                           {slideshowIndex + 1} / {motivationalImages.length}
-                         </span>
-                       </div>
-                     </div>
-                   </div>
-                 ) : (
-                   <div className="grid grid-cols-1 gap-4">
-                     {motivationalImages.map((img) => (
-                       <div key={img.id} className={`group relative rounded-xl overflow-hidden shadow-lg border ${theme.border} ${theme.bgCard}`}>
-                         <img 
-                           src={img.src} 
-                           alt="Motivation" 
-                           className="w-full h-auto object-cover hover:scale-105 transition-transform duration-500" 
-                           onError={(e) => {
-                             console.error('Failed to load image:', img.src?.substring(0, 50) + '...');
-                             // Image src is already set, browser will show broken image icon
-                           }}
-                         />
-                         <button onClick={(e) => handleDeleteImage(img.id, e)} className="absolute top-2 right-2 bg-black/50 hover:bg-red-600 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm">
-                           <X size={14} />
-                         </button>
-                       </div>
-                     ))}
-                   </div>
+                 {!showMetricsView && (
+                   <div className={`text-[10px] font-bold ${theme.textMuted} ${theme.bgCard} px-2 py-1 rounded`}>{motivationalImages.length} Ítems</div>
                  )}
                </div>
-               <div className={`p-3 sm:p-4 ${theme.bgSec} border-t ${theme.borderSec} text-center`}><p className={`text-xs ${theme.textMuted} flex items-center justify-center gap-2`}><MousePointerClick size={12} /> Selecciona un día para ver detalles</p></div>
-               {isDragging && (<div className={`absolute inset-0 ${theme.bgSec} bg-opacity-90 backdrop-blur-sm flex items-center justify-center z-50 border-2 ${theme.accentBorder} border-dashed rounded-lg m-2 pointer-events-none`}><div className={`text-center ${theme.accentText} animate-bounce`}><UploadCloud size={64} className="mx-auto mb-2" /><h3 className="text-2xl font-bold">Soltar Imagen</h3></div></div>)}
+               {showMetricsView ? (
+                 <MetricsView 
+                   metrics={metrics} 
+                   theme={theme} 
+                   accountBalance={accountBalance}
+                   showMetricsAsPercentage={showMetricsAsPercentage}
+                   chartType={chartType}
+                   onChartTypeChange={setChartType}
+                   currentDate={currentDate}
+                 />
+               ) : (
+                 <>
+                   <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4">
+                     {motivationalImages.length === 0 ? (
+                       <div className={`h-full flex flex-col items-center justify-center text-center ${theme.textMuted} opacity-60 pointer-events-none`}>
+                         <UploadCloud size={48} className="mb-4" />
+                         <p className="text-sm font-medium mb-1">Arrastra tus imágenes aquí</p>
+                         <p className="text-xs max-w-[200px]">Crea tu tablero de motivación.</p>
+                       </div>
+                     ) : isSlideshowActive && motivationalImages.length >= 3 ? (
+                       <div className="flex flex-col h-full min-h-0">
+                         <div className={`relative flex-1 min-h-[400px] rounded-xl overflow-hidden border ${theme.border} ${theme.bgCard} group`}>
+                           {motivationalImages.map((img, idx) => (
+                             <img
+                               key={img.id}
+                               src={img.src}
+                               alt={`Motivation ${idx + 1}`}
+                               className={`absolute inset-0 w-full h-full object-cover ${
+                                 slideshowAnimation === 'smooth' 
+                                   ? `transition-opacity duration-700 ${idx === slideshowIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`
+                                   : `${idx === slideshowIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`
+                               }`}
+                               onError={(e) => {
+                                 console.error('Failed to load image:', img.src?.substring(0, 50) + '...');
+                                 // Image src is already set, browser will show broken image icon
+                               }}
+                             />
+                           ))}
+                           <button
+                             onClick={(e) => handleDeleteImage(motivationalImages[slideshowIndex]?.id, e)}
+                             className="absolute top-2 right-2 bg-black/50 hover:bg-red-600 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm z-20"
+                           >
+                             <X size={14} />
+                           </button>
+                           <button
+                             onClick={handleSlideshowPrev}
+                             className={`absolute left-2 top-1/2 -translate-y-1/2 ${theme.bgCard} ${theme.border} border p-2 rounded-full ${theme.textMain} hover:${theme.accentBg} hover:text-white transition-all opacity-0 group-hover:opacity-100 z-20`}
+                           >
+                             <ChevronLeft size={18} />
+                           </button>
+                           <button
+                             onClick={handleSlideshowNext}
+                             className={`absolute right-2 top-1/2 -translate-y-1/2 ${theme.bgCard} ${theme.border} border p-2 rounded-full ${theme.textMain} hover:${theme.accentBg} hover:text-white transition-all opacity-0 group-hover:opacity-100 z-20`}
+                           >
+                             <ChevronRight size={18} />
+                           </button>
+                           <div className={`absolute bottom-4 left-1/2 -translate-x-1/2 ${theme.bgCard}/80 backdrop-blur-sm px-3 py-1.5 rounded-full border ${theme.border} opacity-0 group-hover:opacity-100 transition-opacity z-20`}>
+                             <span className={`text-xs font-bold ${theme.textMain}`}>
+                               {slideshowIndex + 1} / {motivationalImages.length}
+                             </span>
+                           </div>
+                         </div>
+                       </div>
+                     ) : (
+                       <div className="grid grid-cols-1 gap-4">
+                         {motivationalImages.map((img) => (
+                           <div key={img.id} className={`group relative rounded-xl overflow-hidden shadow-lg border ${theme.border} ${theme.bgCard}`}>
+                             <img 
+                               src={img.src} 
+                               alt="Motivation" 
+                               className="w-full h-auto object-cover hover:scale-105 transition-transform duration-500" 
+                               onError={(e) => {
+                                 console.error('Failed to load image:', img.src?.substring(0, 50) + '...');
+                                 // Image src is already set, browser will show broken image icon
+                               }}
+                             />
+                             <button onClick={(e) => handleDeleteImage(img.id, e)} className="absolute top-2 right-2 bg-black/50 hover:bg-red-600 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm">
+                               <X size={14} />
+                             </button>
+                           </div>
+                         ))}
+                       </div>
+                     )}
+                   </div>
+                   <div className={`p-3 sm:p-4 ${theme.bgSec} border-t ${theme.borderSec} text-center`}><p className={`text-xs ${theme.textMuted} flex items-center justify-center gap-2`}><MousePointerClick size={12} /> Selecciona un día para ver detalles</p></div>
+                   {isDragging && (<div className={`absolute inset-0 ${theme.bgSec} bg-opacity-90 backdrop-blur-sm flex items-center justify-center z-50 border-2 ${theme.accentBorder} border-dashed rounded-lg m-2 pointer-events-none`}><div className={`text-center ${theme.accentText} animate-bounce`}><UploadCloud size={64} className="mx-auto mb-2" /><h3 className="text-2xl font-bold">Soltar Imagen</h3></div></div>)}
+                 </>
+               )}
             </div>
           )}
         </div>
