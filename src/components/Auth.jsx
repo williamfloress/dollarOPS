@@ -271,6 +271,31 @@ export const Auth = ({ onAuthChange, theme }) => {
     }
   };
 
+  const validatePassword = (pwd) => {
+    const errors = [];
+    
+    if (pwd.length <= 6) {
+      errors.push('La contraseña debe tener más de 6 caracteres');
+    }
+    
+    if (!/[A-Z]/.test(pwd)) {
+      errors.push('La contraseña debe contener al menos una letra mayúscula');
+    }
+    
+    if (!/[0-9]/.test(pwd)) {
+      errors.push('La contraseña debe contener al menos un número');
+    }
+    
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd)) {
+      errors.push('La contraseña debe contener al menos un carácter especial');
+    }
+    
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -279,6 +304,14 @@ export const Auth = ({ onAuthChange, theme }) => {
     try {
       let result;
       if (isSignUp) {
+        // Validate password requirements for sign up
+        const passwordValidation = validatePassword(password);
+        if (!passwordValidation.isValid) {
+          setError(passwordValidation.errors.join('. '));
+          setLoading(false);
+          return;
+        }
+        
         result = await signUp(email, password);
         
         // After sign up, show verification pending page instead of logging in
@@ -800,8 +833,55 @@ export const Auth = ({ onAuthChange, theme }) => {
               onChange={(e) => setPassword(e.target.value)}
               className={`w-full px-4 py-3 ${themeColors.bgInput} ${themeColors.textMain} rounded-lg border ${themeColors.border} focus:outline-none focus:ring-2 ${themeColors.accentRing} transition-all`}
               required
-              minLength={6}
+              minLength={7}
             />
+            {isSignUp && (
+              <div className="mt-2 space-y-1">
+                <p className={`text-xs ${themeColors.textSec} mb-2`}>La contraseña debe cumplir:</p>
+                <div className="space-y-1 text-xs">
+                  <div className={`flex items-center gap-2 ${password.length > 6 ? 'text-green-400' : themeColors.textMuted}`}>
+                    <svg className={`w-4 h-4 ${password.length > 6 ? 'text-green-400' : themeColors.textMuted}`} fill="currentColor" viewBox="0 0 20 20">
+                      {password.length > 6 ? (
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      ) : (
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      )}
+                    </svg>
+                    Más de 6 caracteres
+                  </div>
+                  <div className={`flex items-center gap-2 ${/[A-Z]/.test(password) ? 'text-green-400' : themeColors.textMuted}`}>
+                    <svg className={`w-4 h-4 ${/[A-Z]/.test(password) ? 'text-green-400' : themeColors.textMuted}`} fill="currentColor" viewBox="0 0 20 20">
+                      {/[A-Z]/.test(password) ? (
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      ) : (
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      )}
+                    </svg>
+                    Al menos una letra mayúscula
+                  </div>
+                  <div className={`flex items-center gap-2 ${/[0-9]/.test(password) ? 'text-green-400' : themeColors.textMuted}`}>
+                    <svg className={`w-4 h-4 ${/[0-9]/.test(password) ? 'text-green-400' : themeColors.textMuted}`} fill="currentColor" viewBox="0 0 20 20">
+                      {/[0-9]/.test(password) ? (
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      ) : (
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      )}
+                    </svg>
+                    Al menos un número
+                  </div>
+                  <div className={`flex items-center gap-2 ${/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password) ? 'text-green-400' : themeColors.textMuted}`}>
+                    <svg className={`w-4 h-4 ${/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password) ? 'text-green-400' : themeColors.textMuted}`} fill="currentColor" viewBox="0 0 20 20">
+                      {/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password) ? (
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      ) : (
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      )}
+                    </svg>
+                    Al menos un carácter especial
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Remember Email Checkbox */}
