@@ -627,8 +627,8 @@ const handleSocialAuth = async (provider) => {
 
 ### Checkpoint 4.1: Add Profile Management Functions
 
-- [ ] **4.1.1** Open `src/utils/supabase.js`
-- [ ] **4.1.2** Add get user profile function:
+- [x] **4.1.1** Open `src/utils/supabase.js`
+- [x] **4.1.2** Add get user profile function:
 
 ```javascript
 /**
@@ -660,7 +660,7 @@ export const getUserProfile = async (userId) => {
 };
 ```
 
-- [ ] **4.1.3** Add update user profile function:
+- [x] **4.1.3** Add update user profile function:
 
 ```javascript
 /**
@@ -692,7 +692,7 @@ export const updateUserProfile = async (userId, updates) => {
 };
 ```
 
-- [ ] **4.1.4** Add update email function:
+- [x] **4.1.4** Add update email function:
 
 ```javascript
 /**
@@ -728,8 +728,8 @@ export const updateUserEmail = async (newEmail) => {
 
 ### Checkpoint 4.2: Create Profile Management Component
 
-- [ ] **4.2.1** Create new file `src/components/ProfileSettings.jsx`
-- [ ] **4.2.2** Add component code:
+- [x] **4.2.1** Create new file `src/components/ProfileSettings.jsx`
+- [x] **4.2.2** Add component code:
 
 ```javascript
 import { useState, useEffect } from 'react';
@@ -932,20 +932,20 @@ export const ProfileSettings = ({ user, theme, onClose }) => {
 
 ### Checkpoint 4.3: Integrate Profile Settings into App
 
-- [ ] **4.3.1** Open `src/App.jsx`
-- [ ] **4.3.2** Import ProfileSettings component:
+- [x] **4.3.1** Open `src/App.jsx`
+- [x] **4.3.2** Import ProfileSettings component:
 
 ```javascript
 import { ProfileSettings } from './components/ProfileSettings';
 ```
 
-- [ ] **4.3.3** Add state for profile settings modal:
+- [x] **4.3.3** Add state for profile settings modal:
 
 ```javascript
 const [showProfileSettings, setShowProfileSettings] = useState(false);
 ```
 
-- [ ] **4.3.4** Add button to open profile settings (in settings menu or header):
+- [x] **4.3.4** Add button to open profile settings (in settings menu or header):
 
 ```javascript
 {user && (
@@ -959,7 +959,7 @@ const [showProfileSettings, setShowProfileSettings] = useState(false);
 )}
 ```
 
-- [ ] **4.3.5** Add ProfileSettings modal (in render, similar to other modals):
+- [x] **4.3.5** Add ProfileSettings modal (in render, similar to other modals):
 
 ```javascript
 {showProfileSettings && (

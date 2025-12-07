@@ -328,6 +328,88 @@ export const resendVerificationEmail = async (email) => {
 };
 
 /**
+ * Get user profile
+ * @param {string} userId - User ID
+ * @returns {Promise<{profile: Object|null, error: Error|null}>}
+ */
+export const getUserProfile = async (userId) => {
+  if (!supabaseClient || !userId) {
+    return { profile: null, error: new Error('Supabase not configured or no user ID') };
+  }
+
+  try {
+    const { data, error } = await supabaseClient
+      .from('user_profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (error) {
+      return { profile: null, error };
+    }
+
+    return { profile: data, error: null };
+  } catch (error) {
+    console.error('Error getting user profile:', error);
+    return { profile: null, error };
+  }
+};
+
+/**
+ * Update user profile
+ * @param {string} userId - User ID
+ * @param {Object} updates - Profile updates (username, etc.)
+ * @returns {Promise<{success: boolean, error: Error|null}>}
+ */
+export const updateUserProfile = async (userId, updates) => {
+  if (!supabaseClient || !userId) {
+    return { success: false, error: new Error('Supabase not configured or no user ID') };
+  }
+
+  try {
+    const { error } = await supabaseClient
+      .from('user_profiles')
+      .update(updates)
+      .eq('id', userId);
+
+    if (error) {
+      return { success: false, error };
+    }
+
+    return { success: true, error: null };
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    return { success: false, error };
+  }
+};
+
+/**
+ * Update user email
+ * @param {string} newEmail - New email address
+ * @returns {Promise<{success: boolean, error: Error|null}>}
+ */
+export const updateUserEmail = async (newEmail) => {
+  if (!supabaseClient) {
+    return { success: false, error: new Error('Supabase not configured') };
+  }
+
+  try {
+    const { error } = await supabaseClient.auth.updateUser({
+      email: newEmail,
+    });
+
+    if (error) {
+      return { success: false, error };
+    }
+
+    return { success: true, error: null };
+  } catch (error) {
+    console.error('Error updating email:', error);
+    return { success: false, error };
+  }
+};
+
+/**
  * Load all journal data from Supabase
  * @param {string} userId - User ID
  * @returns {Promise<{data: Object|null, error: Error|null}>}

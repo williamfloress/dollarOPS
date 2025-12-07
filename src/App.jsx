@@ -35,7 +35,8 @@ import {
   Zap,
   Brain,
   CalendarX,
-  LogOut
+  LogOut,
+  User
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -56,6 +57,7 @@ import {
 } from './utils/supabase.js';
 import { getStorageMode } from './utils/storage.js';
 import { Auth } from './components/Auth';
+import { ProfileSettings } from './components/ProfileSettings';
 
 // --- DEFINICIÓN DE TEMAS ---
 const THEMES = {
@@ -863,6 +865,7 @@ export default function TradingJournalApp() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetStep, setResetStep] = useState(1); // 1: initial warning, 2: export offer, 3: final confirmation
   const [showSettingsCloseConfirm, setShowSettingsCloseConfirm] = useState(false);
+  const [showProfileSettings, setShowProfileSettings] = useState(false);
   // Track settings state for unsaved changes detection
   const [settingsBalance, setSettingsBalance] = useState(0); // Can be number or empty string while typing
   const [settingsTheme, setSettingsTheme] = useState('slate_blue');
@@ -2436,14 +2439,24 @@ export default function TradingJournalApp() {
                     Conectado como: <span className={`font-semibold ${theme.accentText}`}>{user.email}</span>
                   </p>
                 </div>
-                <Button 
-                  variant="outline" 
-                  onClick={handleSignOut} 
-                  theme={theme} 
-                  className="w-full flex items-center justify-center gap-2"
-                >
-                  <LogOut size={18} /> Cerrar Sesión
-                </Button>
+                <div className="space-y-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setShowProfileSettings(true)} 
+                    theme={theme} 
+                    className="w-full flex items-center justify-center gap-2"
+                  >
+                    <User size={18} /> Profile Settings
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={handleSignOut} 
+                    theme={theme} 
+                    className="w-full flex items-center justify-center gap-2"
+                  >
+                    <LogOut size={18} /> Cerrar Sesión
+                  </Button>
+                </div>
               </div>
             )}
             <div className={`pt-4 border-t ${theme.borderSec}`}>
@@ -2729,6 +2742,17 @@ export default function TradingJournalApp() {
               </Button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Profile Settings Modal */}
+      {showProfileSettings && user && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
+          <ProfileSettings
+            user={user}
+            theme={THEMES[currentTheme]}
+            onClose={() => setShowProfileSettings(false)}
+          />
         </div>
       )}
 
