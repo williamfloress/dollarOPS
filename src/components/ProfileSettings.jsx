@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getUserProfile, updateUserProfile, updateUserEmail, getCurrentUser, getSupabaseClient } from '../utils/supabase.js';
-import { User, Mail, Save, X } from 'lucide-react';
+import { getUserProfile, updateUserProfile, updateUserEmail, getCurrentUser, getSupabaseClient, signIn } from '../utils/supabase.js';
+import { User, Mail, Save, X, Lock } from 'lucide-react';
 
 export const ProfileSettings = ({ user, theme, onClose }) => {
   const [profile, setProfile] = useState(null);
@@ -12,7 +12,9 @@ export const ProfileSettings = ({ user, theme, onClose }) => {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [newEmail, setNewEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [isEmailChangeInProgress, setIsEmailChangeInProgress] = useState(false);
+  const [validatingPassword, setValidatingPassword] = useState(false);
 
   const themeColors = theme?.colors || {
     bgMain: 'bg-slate-950',
@@ -157,8 +159,31 @@ export const ProfileSettings = ({ user, theme, onClose }) => {
         }
       }
 
-      // Update email if changed
+      // Update email if changed - REQUIRES PASSWORD VALIDATION
       if (newEmail !== email && newEmail && newEmail.trim() !== '') {
+        // Validate password before proceeding with email change
+        if (!password || password.trim() === '') {
+          setError('Por favor, ingresa tu contraseña para confirmar el cambio de correo.');
+          setSaving(false);
+          return;
+        }
+
+        // Validate password by attempting to sign in
+        setValidatingPassword(true);
+        const { user: validatedUser, error: passwordError } = await signIn(email, password);
+        
+        if (passwordError || !validatedUser) {
+          setValidatingPassword(false);
+          setError('Contraseña incorrecta. La solicitud de cambio de correo ha sido rechazada por seguridad.');
+          setPassword(''); // Clear password field for security
+          setSaving(false);
+          return;
+        }
+
+        // Password is correct, proceed with email change
+        setValidatingPassword(false);
+        setPassword(''); // Clear password after validation
+        
         // Set flag to prevent listener from interfering
         setIsEmailChangeInProgress(true);
         
@@ -210,6 +235,7 @@ export const ProfileSettings = ({ user, theme, onClose }) => {
       setError(err.message || 'An error occurred while saving the profile');
     } finally {
       setSaving(false);
+      setValidatingPassword(false);
     }
   };
 
@@ -287,7 +313,13 @@ export const ProfileSettings = ({ user, theme, onClose }) => {
           <input
             type="email"
             value={newEmail}
-            onChange={(e) => setNewEmail(e.target.value)}
+            onChange={(e) => {
+              setNewEmail(e.target.value);
+              // Clear password when email changes
+              if (e.target.value === email) {
+                setPassword('');
+              }
+            }}
             className={`w-full px-3 py-2 ${themeColors.bgInput} ${themeColors.textMain} rounded border ${themeColors.border}`}
             placeholder="Enter email"
           />
@@ -296,14 +328,35 @@ export const ProfileSettings = ({ user, theme, onClose }) => {
           </p>
         </div>
 
+        {/* Password field - only show when email is being changed */}
+        {newEmail !== email && newEmail && newEmail.trim() !== '' && (
+          <div>
+            <label className={`block ${themeColors.textSec} mb-2 flex items-center gap-2`}>
+              <Lock size={16} />
+              Contraseña actual
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className={`w-full px-3 py-2 ${themeColors.bgInput} ${themeColors.textMain} rounded border ${themeColors.border}`}
+              placeholder="Ingresa tu contraseña para confirmar"
+              disabled={validatingPassword}
+            />
+            <p className={`mt-1 text-xs ${themeColors.textSec}`}>
+              Por seguridad, necesitamos verificar tu contraseña para cambiar el correo electrónico.
+            </p>
+          </div>
+        )}
+
         <div className="flex gap-3 pt-4">
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || validatingPassword}
             className={`flex-1 px-4 py-2 ${themeColors.accentBg} text-white rounded ${themeColors.accentHover} disabled:opacity-50 flex items-center justify-center gap-2`}
           >
             <Save size={16} />
-            {saving ? 'Saving...' : 'Save Changes'}
+            {validatingPassword ? 'Validando...' : saving ? 'Saving...' : 'Save Changes'}
           </button>
           {onClose && (
             <button
