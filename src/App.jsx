@@ -10,7 +10,8 @@ import {
   X, 
   ChevronLeft, 
   ChevronRight,
-  ChevronDown, 
+  ChevronDown,
+  ChevronUp, 
   Save,
   Settings,
   Edit2,
@@ -417,7 +418,7 @@ const Select = ({ label, value, onChange, options, theme }) => {
 };
 
 // --- Componentes Gráficos ---
-const DonutChart = ({ wins, losses, breakEven = 0, size = 60, theme }) => {
+const DonutChart = ({ wins, losses, breakEven = 0, size = 60, theme, percentageType = 'winRate', profitPercentage = 0 }) => {
   const total = wins + losses + breakEven;
   const winPercentage = total > 0 ? (wins / total) * 100 : 0;
   const lossPercentage = total > 0 ? (losses / total) * 100 : 0;
@@ -426,6 +427,12 @@ const DonutChart = ({ wins, losses, breakEven = 0, size = 60, theme }) => {
   const safeWinPercentage = isNaN(winPercentage) ? 0 : winPercentage;
   const safeLossPercentage = isNaN(lossPercentage) ? 0 : lossPercentage;
   const safeBreakEvenPercentage = isNaN(breakEvenPercentage) ? 0 : breakEvenPercentage;
+  
+  // Determinar qué porcentaje mostrar
+  const displayPercentage = percentageType === 'profitPercentage' 
+    ? profitPercentage 
+    : safeWinPercentage;
+  const safeDisplayPercentage = isNaN(displayPercentage) ? 0 : displayPercentage;
   
   // Calcular offsets para los círculos
   const winOffset = 0;
@@ -484,13 +491,13 @@ const DonutChart = ({ wins, losses, breakEven = 0, size = 60, theme }) => {
         )}
       </svg>
       <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-        {Math.round(safeWinPercentage)}%
+        {Math.round(safeDisplayPercentage)}%
       </div>
     </div>
   );
 };
 
-const PieChartComponent = ({ wins, losses, breakEven = 0, size = 60, theme }) => {
+const PieChartComponent = ({ wins, losses, breakEven = 0, size = 60, theme, percentageType = 'winRate', profitPercentage = 0 }) => {
   const total = wins + losses + breakEven;
   const winPercentage = total > 0 ? (wins / total) * 100 : 0;
   const lossPercentage = total > 0 ? (losses / total) * 100 : 0;
@@ -499,6 +506,12 @@ const PieChartComponent = ({ wins, losses, breakEven = 0, size = 60, theme }) =>
   const safeWinPercentage = isNaN(winPercentage) ? 0 : winPercentage;
   const safeLossPercentage = isNaN(lossPercentage) ? 0 : lossPercentage;
   const safeBreakEvenPercentage = isNaN(breakEvenPercentage) ? 0 : breakEvenPercentage;
+  
+  // Determinar qué porcentaje mostrar
+  const displayPercentage = percentageType === 'profitPercentage' 
+    ? profitPercentage 
+    : safeWinPercentage;
+  const safeDisplayPercentage = isNaN(displayPercentage) ? 0 : displayPercentage;
   
   // Calcular los ángulos para cada segmento
   const winAngle = (safeWinPercentage / 100) * 360;
@@ -545,150 +558,183 @@ const PieChartComponent = ({ wins, losses, breakEven = 0, size = 60, theme }) =>
         )}
       </svg>
       <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-        {Math.round(safeWinPercentage)}%
+        {Math.round(safeDisplayPercentage)}%
       </div>
     </div>
   );
 };
 
-const BarChart = ({ wins, losses, size = 120, theme }) => {
-  const total = wins + losses;
-  const maxValue = Math.max(wins, losses, 1);
-  const winHeight = total > 0 ? (wins / maxValue) * 100 : 0;
-  const lossHeight = total > 0 ? (losses / maxValue) * 100 : 0;
-  const barWidth = 35;
+const LineAreaChart = ({ dataPoints, size = 120, theme }) => {
+  // dataPoints should be an array of { day: number, value: number }
+  // If not provided, create a simple chart from wins/losses
   const chartHeight = 80;
   const chartWidth = 100;
-  const centerY = chartHeight / 2;
-  const padding = 10;
-  const availableHeight = centerY - padding;
+  const padding = 15;
+  const availableWidth = chartWidth - padding * 2;
+  const availableHeight = chartHeight - padding * 2;
+  
+  // If dataPoints is not provided, create default empty chart
+  const points = dataPoints || [];
+  const pointCount = points.length || 1;
+  const spacing = pointCount > 1 ? availableWidth / (pointCount - 1) : 0;
+  
+  // Calculate min and max values for scaling
+  const values = points.map(p => p.value || 0);
+  const minValue = Math.min(...values, 0);
+  const maxValue = Math.max(...values, 0);
+  const valueRange = maxValue - minValue || 1;
+  
+  // Convert data points to SVG coordinates
+  const svgPoints = points.map((point, index) => {
+    const x = padding + (index * spacing);
+    const normalizedValue = (point.value || 0) - minValue;
+    const y = chartHeight - padding - (normalizedValue / valueRange) * availableHeight;
+    return { x, y, value: point.value || 0, day: point.day || index + 1 };
+  });
+  
+  // Create path for the line
+  const linePath = svgPoints.length > 0 
+    ? svgPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+    : '';
+  
+  // Create path for the area (closed path)
+  const areaPath = svgPoints.length > 0
+    ? `${linePath} L ${svgPoints[svgPoints.length - 1].x} ${chartHeight - padding} L ${svgPoints[0].x} ${chartHeight - padding} Z`
+    : '';
   
   return (
     <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
       <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-full">
-        {/* Center line (zero axis) */}
-        <line 
-          x1={padding} 
-          y1={centerY} 
-          x2={chartWidth - padding} 
-          y2={centerY} 
-          stroke="currentColor" 
-          className={clsx(theme.textSec)} 
-          strokeWidth="1.5" 
-          opacity="0.3" 
-        />
-        
-        {/* Wins bar (positive, going up from center) */}
-        {wins > 0 && (
-          <g>
-            <rect
-              x={padding + 5}
-              y={centerY - (winHeight * availableHeight / 100)}
-              width={barWidth}
-              height={winHeight * availableHeight / 100}
-              fill="#10B981"
-              className="transition-all duration-500 ease-out"
-              rx="3"
+        {/* Grid lines (dashed green) */}
+        {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
+          const y = padding + (ratio * availableHeight);
+          return (
+            <line
+              key={i}
+              x1={padding}
+              y1={y}
+              x2={chartWidth - padding}
+              y2={y}
+              stroke="#10B981"
+              strokeWidth="0.5"
+              opacity="0.2"
+              strokeDasharray="2 2"
             />
-            <text
-              x={padding + 5 + barWidth / 2}
-              y={centerY - (winHeight * availableHeight / 100) - 6}
-              textAnchor="middle"
-              className={clsx("text-[9px] font-bold fill-current", "fill-emerald-400")}
-            >
-              {wins}
-            </text>
-          </g>
+          );
+        })}
+        
+        {/* Area fill */}
+        {areaPath && (
+          <path
+            d={areaPath}
+            fill="#10B981"
+            fillOpacity="0.2"
+            className="transition-all duration-500 ease-out"
+          />
         )}
         
-        {/* Losses bar (negative, going down from center) */}
-        {losses > 0 && (
-          <g>
-            <rect
-              x={chartWidth - padding - barWidth - 5}
-              y={centerY}
-              width={barWidth}
-              height={lossHeight * availableHeight / 100}
-              fill="#F43F5E"
-              className="transition-all duration-500 ease-out"
-              rx="3"
-            />
-            <text
-              x={chartWidth - padding - barWidth - 5 + barWidth / 2}
-              y={centerY + (lossHeight * availableHeight / 100) + 12}
-              textAnchor="middle"
-              className={clsx("text-[9px] font-bold fill-current", "fill-rose-400")}
-            >
-              {losses}
-            </text>
-          </g>
+        {/* Line */}
+        {linePath && (
+          <path
+            d={linePath}
+            fill="none"
+            stroke="#10B981"
+            strokeWidth="2"
+            className="transition-all duration-500 ease-out"
+          />
         )}
         
-        {/* Labels */}
-        <text 
-          x={padding + 5 + barWidth / 2} 
-          y={chartHeight - 3} 
-          textAnchor="middle" 
-          className={clsx("text-[9px] fill-current font-medium", theme.textSec)}
-        >
-          Wins
-        </text>
-        <text 
-          x={chartWidth - padding - barWidth - 5 + barWidth / 2} 
-          y={chartHeight - 3} 
-          textAnchor="middle" 
-          className={clsx("text-[9px] fill-current font-medium", theme.textSec)}
-        >
-          Losses
-        </text>
+        {/* Data points (circles) */}
+        {svgPoints.map((point, index) => (
+          <circle
+            key={index}
+            cx={point.x}
+            cy={point.y}
+            r="3"
+            fill="#10B981"
+            className="transition-all duration-500 ease-out"
+          />
+        ))}
+        
+        {/* X-axis labels (Día) */}
+        {svgPoints.length > 0 && svgPoints.map((point, index) => {
+          if (index % Math.ceil(svgPoints.length / 5) === 0 || index === svgPoints.length - 1) {
+            return (
+              <text
+                key={index}
+                x={point.x}
+                y={chartHeight - 3}
+                textAnchor="middle"
+                className={clsx("text-[8px] fill-current font-medium", theme.textSec)}
+              >
+                Día {point.day}
+              </text>
+            );
+          }
+          return null;
+        })}
       </svg>
     </div>
   );
 };
 
-// Gráfico de barras múltiples para semanas o meses
-const MultiBarChart = ({ dataArray, labels, theme, type = 'week' }) => {
+// Gráfico de línea con área para semanas o meses (mostrando profit/loss acumulado)
+const MultiLineAreaChart = ({ dataArray, labels, theme, type = 'week' }) => {
   const chartHeight = 200;
   const itemCount = dataArray.length;
   const chartWidth = type === 'week' ? Math.max(400, itemCount * 80) : Math.max(600, itemCount * 50);
-  const padding = 40;
-  const barSpacing = type === 'week' ? 80 : 50;
-  const barWidth = type === 'week' ? 30 : 20;
+  const padding = 50;
   const availableWidth = chartWidth - padding * 2;
   const availableHeight = chartHeight - padding * 2;
   
-  // Calcular el valor máximo para escalar las barras
-  const maxValue = Math.max(...dataArray.map(d => Math.max(d.wins || 0, d.losses || 0)), 1);
+  // Calcular valores acumulados (profit/loss)
+  let cumulativeValue = 0;
+  const cumulativeData = dataArray.map((data, index) => {
+    cumulativeValue += data.val || 0;
+    return {
+      x: padding + (index * (availableWidth / Math.max(itemCount - 1, 1))),
+      value: cumulativeValue,
+      label: labels[index] || `Item ${index + 1}`,
+      period: index + 1
+    };
+  });
+  
+  // Calcular min y max para escalar el gráfico
+  const values = cumulativeData.map(d => d.value);
+  const minValue = Math.min(...values, 0);
+  const maxValue = Math.max(...values, 0);
+  const valueRange = maxValue - minValue || 1;
+  
+  // Convertir a coordenadas Y (invertido porque SVG Y aumenta hacia abajo)
+  const points = cumulativeData.map(point => {
+    const normalizedValue = point.value - minValue;
+    const y = chartHeight - padding - (normalizedValue / valueRange) * availableHeight;
+    return { ...point, y };
+  });
+  
+  // Crear path para la línea
+  const linePath = points.length > 0
+    ? points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
+    : '';
+  
+  // Crear path para el área (cerrado)
+  const areaPath = points.length > 0
+    ? `${linePath} L ${points[points.length - 1].x} ${chartHeight - padding} L ${points[0].x} ${chartHeight - padding} Z`
+    : '';
+  
+  // Calcular valores para el eje Y (formato monetario)
+  const yAxisSteps = 5;
+  const yAxisValues = Array.from({ length: yAxisSteps }, (_, i) => {
+    const ratio = i / (yAxisSteps - 1);
+    return minValue + (ratio * valueRange);
+  });
   
   return (
     <div className="w-full overflow-x-auto">
       <svg viewBox={`0 0 ${chartWidth} ${chartHeight + 50}`} className="w-full" style={{ minHeight: chartHeight + 50 }}>
-        {/* Eje Y (valores) */}
-        <line 
-          x1={padding} 
-          y1={padding} 
-          x2={padding} 
-          y2={chartHeight - padding} 
-          stroke="currentColor" 
-          className={clsx(theme.textSec)} 
-          strokeWidth="2" 
-          opacity="0.3" 
-        />
-        
-        {/* Eje X (categorías) */}
-        <line 
-          x1={padding} 
-          y1={chartHeight - padding} 
-          x2={chartWidth - padding} 
-          y2={chartHeight - padding} 
-          stroke="currentColor" 
-          className={clsx(theme.textSec)} 
-          strokeWidth="2" 
-          opacity="0.3" 
-        />
-        
-        {/* Líneas de referencia horizontales */}
-        {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
+        {/* Grid lines (dashed green) */}
+        {yAxisValues.map((value, i) => {
+          const ratio = i / (yAxisSteps - 1);
           const y = chartHeight - padding - (ratio * availableHeight);
           return (
             <line
@@ -697,91 +743,106 @@ const MultiBarChart = ({ dataArray, labels, theme, type = 'week' }) => {
               y1={y}
               x2={chartWidth - padding}
               y2={y}
-              stroke="currentColor"
-              className={clsx(theme.textSec)}
+              stroke="#10B981"
               strokeWidth="1"
-              opacity="0.1"
+              opacity="0.2"
               strokeDasharray="4 4"
             />
           );
         })}
         
-        {/* Barras */}
-        {dataArray.map((data, index) => {
-          const x = padding + (index * barSpacing) + (barSpacing / 2) - barWidth;
-          const winHeight = ((data.wins || 0) / maxValue) * availableHeight;
-          const lossHeight = ((data.losses || 0) / maxValue) * availableHeight;
-          const winY = chartHeight - padding - winHeight;
-          const lossY = chartHeight - padding;
-          
+        {/* Eje Y (valores monetarios) */}
+        {yAxisValues.map((value, i) => {
+          const ratio = i / (yAxisSteps - 1);
+          const y = chartHeight - padding - (ratio * availableHeight);
           return (
-            <g key={index}>
-              {/* Barra de Wins */}
-              {(data.wins || 0) > 0 && (
-                <g>
-                  <rect
-                    x={x}
-                    y={winY}
-                    width={barWidth}
-                    height={winHeight}
-                    fill="#10B981"
-                    className="transition-all duration-500 ease-out"
-                    rx="3"
-                  />
-                  <text
-                    x={x + barWidth / 2}
-                    y={winY - 5}
-                    textAnchor="middle"
-                    className={clsx("text-[10px] font-bold fill-current", "fill-emerald-400")}
-                  >
-                    {data.wins}
-                  </text>
-                </g>
-              )}
-              
-              {/* Barra de Losses */}
-              {(data.losses || 0) > 0 && (
-                <g>
-                  <rect
-                    x={x + barWidth + 3}
-                    y={lossY - lossHeight}
-                    width={barWidth}
-                    height={lossHeight}
-                    fill="#F43F5E"
-                    className="transition-all duration-500 ease-out"
-                    rx="3"
-                  />
-                  <text
-                    x={x + barWidth + 3 + barWidth / 2}
-                    y={lossY - lossHeight - 5}
-                    textAnchor="middle"
-                    className={clsx("text-[10px] font-bold fill-current", "fill-rose-400")}
-                  >
-                    {data.losses}
-                  </text>
-                </g>
-              )}
-              
-              {/* Etiqueta del eje X */}
+            <g key={i}>
               <text
-                x={x + barWidth + 1.5}
-                y={chartHeight - padding + 20}
-                textAnchor="middle"
+                x={padding - 5}
+                y={y + 4}
+                textAnchor="end"
                 className={clsx("text-[10px] fill-current font-medium", theme.textSec)}
               >
-                {labels[index] || `Item ${index + 1}`}
+                {value.toFixed(2)}$
               </text>
             </g>
           );
         })}
         
-        {/* Leyenda */}
-        <g transform={`translate(${Math.min(chartWidth - padding - 80, chartWidth - 100)}, ${padding})`}>
-          <rect x="0" y="0" width="12" height="12" fill="#10B981" rx="2" />
-          <text x="16" y="10" className={clsx("text-[10px] fill-current", theme.textSec)}>Wins</text>
-          <rect x="0" y="18" width="12" height="12" fill="#F43F5E" rx="2" />
-          <text x="16" y="28" className={clsx("text-[10px] fill-current", theme.textSec)}>Losses</text>
-        </g>
+        {/* Eje X (línea base) */}
+        <line 
+          x1={padding} 
+          y1={chartHeight - padding} 
+          x2={chartWidth - padding} 
+          y2={chartHeight - padding} 
+          stroke="currentColor" 
+          className={clsx(theme.textSec)} 
+          strokeWidth="1" 
+          opacity="0.3" 
+        />
+        
+        {/* Área rellena */}
+        {areaPath && (
+          <path
+            d={areaPath}
+            fill="#10B981"
+            fillOpacity="0.2"
+            className="transition-all duration-500 ease-out"
+          />
+        )}
+        
+        {/* Línea */}
+        {linePath && (
+          <path
+            d={linePath}
+            fill="none"
+            stroke="#10B981"
+            strokeWidth="2.5"
+            className="transition-all duration-500 ease-out"
+          />
+        )}
+        
+        {/* Puntos de datos (círculos) */}
+        {points.map((point, index) => (
+          <g key={index}>
+            <circle
+              cx={point.x}
+              cy={point.y}
+              r="4"
+              fill="#10B981"
+              className="transition-all duration-500 ease-out"
+            />
+            {/* Valor en el punto (opcional, solo para algunos puntos) */}
+            {index % Math.ceil(points.length / 5) === 0 || index === points.length - 1 ? (
+              <text
+                x={point.x}
+                y={point.y - 10}
+                textAnchor="middle"
+                className={clsx("text-[9px] font-bold fill-current", "fill-emerald-400")}
+              >
+                {point.value.toFixed(2)}$
+              </text>
+            ) : null}
+          </g>
+        ))}
+        
+        {/* Etiquetas del eje X */}
+        {points.map((point, index) => {
+          if (index % Math.ceil(points.length / 5) === 0 || index === points.length - 1) {
+            return (
+              <text
+                key={index}
+                x={point.x}
+                y={chartHeight - padding + 20}
+                textAnchor="middle"
+                className={clsx("text-[10px] fill-current font-medium", theme.textSec)}
+              >
+                {point.label}
+              </text>
+            );
+          }
+          return null;
+        })}
       </svg>
     </div>
   );
@@ -893,6 +954,11 @@ const LineChart = ({ wins, losses, size = 120, theme }) => {
 const MetricsView = ({ metrics, theme, accountBalance, showMetricsAsPercentage, chartType, onChartTypeChange, currentDate }) => {
   const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   const [selectedPeriod, setSelectedPeriod] = useState(null); // { type: 'week'|'month', index: number, label: string, data: object }
+  const [donutPercentageType, setDonutPercentageType] = useState('winRate'); // 'winRate' | 'profitPercentage'
+  // Estados para controlar secciones colapsables (por defecto retraídas)
+  const [isWeeklyOpen, setIsWeeklyOpen] = useState(false);
+  const [isMonthlyOpen, setIsMonthlyOpen] = useState(false);
+  const [isAnnualOpen, setIsAnnualOpen] = useState(false);
   
   // Card completo para el año
   const MetricCard = ({ label, data, period }) => {
@@ -904,12 +970,22 @@ const MetricsView = ({ metrics, theme, accountBalance, showMetricsAsPercentage, 
     const renderChart = () => {
       switch (chartType) {
         case 'bar':
-          return <BarChart wins={data.wins} losses={data.losses} size={120} theme={theme} />;
+          // Crear puntos de datos para el gráfico de línea mostrando el valor acumulado
+          // Simulamos una progresión simple basada en el profit/loss total
+          const maxDays = 5;
+          const dataPoints = Array.from({ length: maxDays }, (_, i) => {
+            const day = i + 1;
+            // Distribuir el valor total a lo largo de los días de forma progresiva
+            const progress = (day / maxDays);
+            const value = data.val * progress;
+            return { day, value };
+          });
+          return <LineAreaChart dataPoints={dataPoints} size={120} theme={theme} />;
         case 'pie':
-          return <PieChartComponent wins={data.wins} losses={data.losses} breakEven={data.breakEven || 0} size={120} theme={theme} />;
+          return <PieChartComponent wins={data.wins} losses={data.losses} breakEven={data.breakEven || 0} size={120} theme={theme} percentageType={donutPercentageType} profitPercentage={percentage} />;
         case 'donut':
         default:
-          return <DonutChart wins={data.wins} losses={data.losses} breakEven={data.breakEven || 0} size={120} theme={theme} />;
+          return <DonutChart wins={data.wins} losses={data.losses} breakEven={data.breakEven || 0} size={120} theme={theme} percentageType={donutPercentageType} profitPercentage={percentage} />;
       }
     };
     
@@ -931,7 +1007,8 @@ const MetricsView = ({ metrics, theme, accountBalance, showMetricsAsPercentage, 
         
         {total > 0 ? (
           <>
-            {renderChart()}
+            {/* No mostrar gráfico de líneas para anual cuando chartType es 'bar' */}
+            {!(period === 'annual' && chartType === 'bar') && renderChart()}
             <div className="w-full space-y-2">
               <div className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
@@ -957,6 +1034,12 @@ const MetricsView = ({ metrics, theme, accountBalance, showMetricsAsPercentage, 
                 </div>
               )}
               <div className={clsx("pt-2 mt-2 border-t", theme.borderSec, "flex justify-between items-center text-xs")}>
+                <span className={theme.textMuted}>Profit/Loss %</span>
+                <span className={clsx("font-bold", isPositive ? 'text-emerald-400' : 'text-rose-400')}>
+                  {accountBalance > 0 ? (isPositive ? '+' : '') + percentage.toFixed(1) + '%' : 'N/A'}
+                </span>
+              </div>
+              <div className={clsx("flex justify-between items-center text-xs", theme.borderSec)}>
                 <span className={theme.textMuted}>Win Rate</span>
                 <span className={clsx("font-bold", theme.textMain)}>{winPercentage.toFixed(1)}%</span>
               </div>
@@ -982,13 +1065,16 @@ const MetricsView = ({ metrics, theme, accountBalance, showMetricsAsPercentage, 
   const ClickableChart = ({ label, data, index, type }) => {
     const total = data.wins + data.losses + (data.breakEven || 0);
     
+    const isPositive = data.val >= 0;
+    const profitPercentage = accountBalance > 0 ? ((data.val / accountBalance) * 100) : 0;
+    
     const renderChart = () => {
       switch (chartType) {
         case 'pie':
-          return <PieChartComponent wins={data.wins} losses={data.losses} breakEven={data.breakEven || 0} size={80} theme={theme} />;
+          return <PieChartComponent wins={data.wins} losses={data.losses} breakEven={data.breakEven || 0} size={80} theme={theme} percentageType={donutPercentageType} profitPercentage={profitPercentage} />;
         case 'donut':
         default:
-          return <DonutChart wins={data.wins} losses={data.losses} breakEven={data.breakEven || 0} size={80} theme={theme} />;
+          return <DonutChart wins={data.wins} losses={data.losses} breakEven={data.breakEven || 0} size={80} theme={theme} percentageType={donutPercentageType} profitPercentage={profitPercentage} />;
       }
     };
     
@@ -1066,9 +1152,9 @@ const MetricsView = ({ metrics, theme, accountBalance, showMetricsAsPercentage, 
             {/* Chart grande */}
             <div className="flex justify-center">
               {chartType === 'pie' ? (
-                <PieChartComponent wins={data.wins} losses={data.losses} breakEven={data.breakEven || 0} size={150} theme={theme} />
+                <PieChartComponent wins={data.wins} losses={data.losses} breakEven={data.breakEven || 0} size={150} theme={theme} percentageType={donutPercentageType} profitPercentage={percentage} />
               ) : (
-                <DonutChart wins={data.wins} losses={data.losses} breakEven={data.breakEven || 0} size={150} theme={theme} />
+                <DonutChart wins={data.wins} losses={data.losses} breakEven={data.breakEven || 0} size={150} theme={theme} percentageType={donutPercentageType} profitPercentage={percentage} />
               )}
             </div>
             
@@ -1098,6 +1184,12 @@ const MetricsView = ({ metrics, theme, accountBalance, showMetricsAsPercentage, 
                 </div>
               )}
               <div className={clsx("pt-3 mt-3 border-t", theme.borderSec, "flex justify-between items-center")}>
+                <span className={theme.textMuted}>Profit/Loss %</span>
+                <span className={clsx("font-bold text-lg", isPositive ? 'text-emerald-400' : 'text-rose-400')}>
+                  {accountBalance > 0 ? (isPositive ? '+' : '') + percentage.toFixed(1) + '%' : 'N/A'}
+                </span>
+              </div>
+              <div className={clsx("flex justify-between items-center")}>
                 <span className={theme.textMuted}>Win Rate</span>
                 <span className={clsx("font-bold text-lg", theme.textMain)}>{winPercentage.toFixed(1)}%</span>
               </div>
@@ -1117,63 +1209,174 @@ const MetricsView = ({ metrics, theme, accountBalance, showMetricsAsPercentage, 
   return (
     <>
       {/* Chart Type Selector */}
-      <div className={clsx("p-3 sm:p-4 border-b", theme.borderSec, "flex items-center justify-center gap-3", theme.bgSec)}>
-        <span className={clsx("text-xs font-semibold uppercase tracking-wider", theme.textSec)}>Tipo:</span>
-        <div className={clsx("flex gap-1 p-1 rounded-lg border", theme.border)}>
-          <button
-            onClick={() => onChartTypeChange('donut')}
-            className={clsx(
-              "px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5",
-              chartType === 'donut'
-                ? `${theme.accentBg} text-white shadow-md`
-                : `${theme.bgCard} ${theme.textSec} hover:${theme.bgHover}`
-            )}
-            title="Gráfico Donut"
-          >
-            <PieChart size={14} />
-            <span className="hidden sm:inline">Donut</span>
-          </button>
-          <button
-            onClick={() => onChartTypeChange('pie')}
-            className={clsx(
-              "px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5",
-              chartType === 'pie'
-                ? `${theme.accentBg} text-white shadow-md`
-                : `${theme.bgCard} ${theme.textSec} hover:${theme.bgHover}`
-            )}
-            title="Gráfico Pie"
-          >
-            <PieChart size={14} />
-            <span className="hidden sm:inline">Pie</span>
-          </button>
-          <button
-            onClick={() => onChartTypeChange('bar')}
-            className={clsx(
-              "px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5",
-              chartType === 'bar'
-                ? `${theme.accentBg} text-white shadow-md`
-                : `${theme.bgCard} ${theme.textSec} hover:${theme.bgHover}`
-            )}
-            title="Gráfico de Barras"
-          >
-            <BarChart3 size={14} />
-            <span className="hidden sm:inline">Barras</span>
-          </button>
+      <div className={clsx("p-3 sm:p-4 border-b", theme.borderSec, "flex flex-col gap-3", theme.bgSec)}>
+        <div className="flex items-center justify-center gap-3">
+          <span className={clsx("text-xs font-semibold uppercase tracking-wider", theme.textSec)}>Tipo:</span>
+          <div className={clsx("flex gap-1 p-1 rounded-lg border", theme.border)}>
+            <button
+              onClick={() => onChartTypeChange('donut')}
+              className={clsx(
+                "px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5",
+                chartType === 'donut'
+                  ? `${theme.accentBg} text-white shadow-md`
+                  : `${theme.bgCard} ${theme.textSec} hover:${theme.bgHover}`
+              )}
+              title="Gráfico Donut"
+            >
+              <PieChart size={14} />
+              <span className="hidden sm:inline">Donut</span>
+            </button>
+            <button
+              onClick={() => onChartTypeChange('pie')}
+              className={clsx(
+                "px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5",
+                chartType === 'pie'
+                  ? `${theme.accentBg} text-white shadow-md`
+                  : `${theme.bgCard} ${theme.textSec} hover:${theme.bgHover}`
+              )}
+              title="Gráfico Pie"
+            >
+              <PieChart size={14} />
+              <span className="hidden sm:inline">Pie</span>
+            </button>
+            <button
+              onClick={() => onChartTypeChange('bar')}
+              className={clsx(
+                "px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5",
+                chartType === 'bar'
+                  ? `${theme.accentBg} text-white shadow-md`
+                  : `${theme.bgCard} ${theme.textSec} hover:${theme.bgHover}`
+              )}
+              title="Gráfico de Líneas"
+            >
+              <BarChart3 size={14} />
+              <span className="hidden sm:inline">Líneas</span>
+            </button>
+          </div>
         </div>
+        {/* Percentage Type Selector (solo para donut y pie) */}
+        {(chartType === 'donut' || chartType === 'pie') && (
+          <div className="flex items-center justify-center gap-3">
+            <span className={clsx("text-xs font-semibold uppercase tracking-wider", theme.textSec)}>Porcentaje:</span>
+            <div className={clsx("flex gap-1 p-1 rounded-lg border", theme.border)}>
+              <button
+                onClick={() => setDonutPercentageType('winRate')}
+                className={clsx(
+                  "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                  donutPercentageType === 'winRate'
+                    ? `${theme.accentBg} text-white shadow-md`
+                    : `${theme.bgCard} ${theme.textSec} hover:${theme.bgHover}`
+                )}
+                title="Mostrar Win Rate"
+              >
+                Win Rate
+              </button>
+              <button
+                onClick={() => setDonutPercentageType('profitPercentage')}
+                className={clsx(
+                  "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                  donutPercentageType === 'profitPercentage'
+                    ? `${theme.accentBg} text-white shadow-md`
+                    : `${theme.bgCard} ${theme.textSec} hover:${theme.bgHover}`
+                )}
+                title="Mostrar Profit %"
+              >
+                Profit %
+              </button>
+            </div>
+          </div>
+        )}
       </div>
       <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-6">
         {/* Semanal */}
         <div>
-          <h3 className={clsx("text-sm font-bold uppercase tracking-wider mb-4", theme.textSec)}>Semanal</h3>
-          {chartType === 'bar' ? (
-            // Gráfico de barras múltiples para todas las semanas
-            <div className={clsx(theme.bgCard, "border", theme.border, "rounded-xl p-4")}>
-              <MultiBarChart 
+          <button
+            onClick={() => setIsWeeklyOpen(!isWeeklyOpen)}
+            className={clsx(
+              "flex items-center justify-between w-full mb-4 p-2 rounded-lg transition-colors",
+              "hover:bg-slate-800/50",
+              theme.textSec
+            )}
+          >
+            <h3 className={clsx("text-sm font-bold uppercase tracking-wider", theme.textSec)}>Semanal</h3>
+            {isWeeklyOpen ? (
+              <ChevronUp size={18} className={theme.textSec} />
+            ) : (
+              <ChevronDown size={18} className={theme.textSec} />
+            )}
+          </button>
+          {isWeeklyOpen && (
+            <>
+              {chartType === 'bar' ? (
+            // Gráfico de línea con área para todas las semanas + desglose
+            <div className={clsx(theme.bgCard, "border", theme.border, "rounded-xl p-4 sm:p-6 flex flex-col gap-4")}>
+              <MultiLineAreaChart 
                 dataArray={metrics.weeklyStats || []}
                 labels={(metrics.weeklyStats || []).map((_, i) => `Semana ${i + 1}`)}
                 theme={theme}
                 type="week"
               />
+              {/* Desglose agregado de todas las semanas */}
+              {(() => {
+                const weeklyData = metrics.weeklyStats || [];
+                const aggregated = weeklyData.reduce((acc, week) => ({
+                  val: acc.val + week.val,
+                  count: acc.count + week.count,
+                  wins: acc.wins + week.wins,
+                  losses: acc.losses + week.losses,
+                  breakEven: acc.breakEven + (week.breakEven || 0)
+                }), { val: 0, count: 0, wins: 0, losses: 0, breakEven: 0 });
+                const total = aggregated.wins + aggregated.losses + aggregated.breakEven;
+                const winPercentage = total > 0 ? (aggregated.wins / total) * 100 : 0;
+                const isPositive = aggregated.val >= 0;
+                const profitPercentage = accountBalance > 0 ? ((aggregated.val / accountBalance) * 100) : 0;
+                
+                if (total === 0) return null;
+                
+                return (
+                  <div className="w-full space-y-2 pt-4 border-t border-slate-700">
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+                        <span className={theme.textSec}>Wins</span>
+                      </div>
+                      <span className={clsx("font-bold", theme.textMain)}>{aggregated.wins}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-rose-500"></div>
+                        <span className={theme.textSec}>Losses</span>
+                      </div>
+                      <span className={clsx("font-bold", theme.textMain)}>{aggregated.losses}</span>
+                    </div>
+                    {(aggregated.breakEven || 0) > 0 && (
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                          <span className={theme.textSec}>Break Even</span>
+                        </div>
+                        <span className={clsx("font-bold", theme.textMain)}>{aggregated.breakEven || 0}</span>
+                      </div>
+                    )}
+                    <div className={clsx("pt-2 mt-2 border-t", theme.borderSec, "flex justify-between items-center text-xs")}>
+                      <span className={theme.textMuted}>Profit/Loss %</span>
+                      <span className={clsx("font-bold", isPositive ? 'text-emerald-400' : 'text-rose-400')}>
+                        {accountBalance > 0 ? (isPositive ? '+' : '') + profitPercentage.toFixed(1) + '%' : 'N/A'}
+                      </span>
+                    </div>
+                    <div className={clsx("flex justify-between items-center text-xs", theme.borderSec)}>
+                      <span className={theme.textMuted}>Win Rate</span>
+                      <span className={clsx("font-bold", theme.textMain)}>{winPercentage.toFixed(1)}%</span>
+                    </div>
+                    <div className={clsx("flex justify-between items-center text-xs", theme.borderSec)}>
+                      <span className={theme.textMuted}>Profit Factor</span>
+                      <span className={clsx("font-bold font-mono", theme.textMain)}>
+                        {aggregated.losses === 0 ? '∞' : Math.abs(aggregated.wins / aggregated.losses).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           ) : (
             // Donas/Pies clickeables sin contenedores
@@ -1192,20 +1395,99 @@ const MetricsView = ({ metrics, theme, accountBalance, showMetricsAsPercentage, 
               ))}
             </div>
           )}
+            </>
+          )}
         </div>
 
         {/* Mensual */}
         <div>
-          <h3 className={clsx("text-sm font-bold uppercase tracking-wider mb-4", theme.textSec)}>Mensual</h3>
-          {chartType === 'bar' ? (
-            // Gráfico de barras múltiples para todos los meses
-            <div className={clsx(theme.bgCard, "border", theme.border, "rounded-xl p-4")}>
-              <MultiBarChart 
+          <button
+            onClick={() => setIsMonthlyOpen(!isMonthlyOpen)}
+            className={clsx(
+              "flex items-center justify-between w-full mb-4 p-2 rounded-lg transition-colors",
+              "hover:bg-slate-800/50",
+              theme.textSec
+            )}
+          >
+            <h3 className={clsx("text-sm font-bold uppercase tracking-wider", theme.textSec)}>Mensual</h3>
+            {isMonthlyOpen ? (
+              <ChevronUp size={18} className={theme.textSec} />
+            ) : (
+              <ChevronDown size={18} className={theme.textSec} />
+            )}
+          </button>
+          {isMonthlyOpen && (
+            <>
+              {chartType === 'bar' ? (
+            // Gráfico de línea con área para todos los meses + desglose
+            <div className={clsx(theme.bgCard, "border", theme.border, "rounded-xl p-4 sm:p-6 flex flex-col gap-4")}>
+              <MultiLineAreaChart 
                 dataArray={metrics.monthlyStats || []}
                 labels={monthNames}
                 theme={theme}
                 type="month"
               />
+              {/* Desglose agregado de todos los meses */}
+              {(() => {
+                const monthlyData = metrics.monthlyStats || [];
+                const aggregated = monthlyData.reduce((acc, month) => ({
+                  val: acc.val + month.val,
+                  count: acc.count + month.count,
+                  wins: acc.wins + month.wins,
+                  losses: acc.losses + month.losses,
+                  breakEven: acc.breakEven + (month.breakEven || 0)
+                }), { val: 0, count: 0, wins: 0, losses: 0, breakEven: 0 });
+                const total = aggregated.wins + aggregated.losses + aggregated.breakEven;
+                const winPercentage = total > 0 ? (aggregated.wins / total) * 100 : 0;
+                const isPositive = aggregated.val >= 0;
+                const profitPercentage = accountBalance > 0 ? ((aggregated.val / accountBalance) * 100) : 0;
+                
+                if (total === 0) return null;
+                
+                return (
+                  <div className="w-full space-y-2 pt-4 border-t border-slate-700">
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+                        <span className={theme.textSec}>Wins</span>
+                      </div>
+                      <span className={clsx("font-bold", theme.textMain)}>{aggregated.wins}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-rose-500"></div>
+                        <span className={theme.textSec}>Losses</span>
+                      </div>
+                      <span className={clsx("font-bold", theme.textMain)}>{aggregated.losses}</span>
+                    </div>
+                    {(aggregated.breakEven || 0) > 0 && (
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                          <span className={theme.textSec}>Break Even</span>
+                        </div>
+                        <span className={clsx("font-bold", theme.textMain)}>{aggregated.breakEven || 0}</span>
+                      </div>
+                    )}
+                    <div className={clsx("pt-2 mt-2 border-t", theme.borderSec, "flex justify-between items-center text-xs")}>
+                      <span className={theme.textMuted}>Profit/Loss %</span>
+                      <span className={clsx("font-bold", isPositive ? 'text-emerald-400' : 'text-rose-400')}>
+                        {accountBalance > 0 ? (isPositive ? '+' : '') + profitPercentage.toFixed(1) + '%' : 'N/A'}
+                      </span>
+                    </div>
+                    <div className={clsx("flex justify-between items-center text-xs", theme.borderSec)}>
+                      <span className={theme.textMuted}>Win Rate</span>
+                      <span className={clsx("font-bold", theme.textMain)}>{winPercentage.toFixed(1)}%</span>
+                    </div>
+                    <div className={clsx("flex justify-between items-center text-xs", theme.borderSec)}>
+                      <span className={theme.textMuted}>Profit Factor</span>
+                      <span className={clsx("font-bold font-mono", theme.textMain)}>
+                        {aggregated.losses === 0 ? '∞' : Math.abs(aggregated.wins / aggregated.losses).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           ) : (
             // Donas/Pies clickeables sin contenedores
@@ -1224,11 +1506,30 @@ const MetricsView = ({ metrics, theme, accountBalance, showMetricsAsPercentage, 
               ))}
             </div>
           )}
+            </>
+          )}
         </div>
 
         {/* Anual - 1 solo chart */}
         <div>
-          <MetricCard label="Anual" data={metrics.annual} period="annual" />
+          <button
+            onClick={() => setIsAnnualOpen(!isAnnualOpen)}
+            className={clsx(
+              "flex items-center justify-between w-full mb-4 p-2 rounded-lg transition-colors",
+              "hover:bg-slate-800/50",
+              theme.textSec
+            )}
+          >
+            <h3 className={clsx("text-sm font-bold uppercase tracking-wider", theme.textSec)}>Anual</h3>
+            {isAnnualOpen ? (
+              <ChevronUp size={18} className={theme.textSec} />
+            ) : (
+              <ChevronDown size={18} className={theme.textSec} />
+            )}
+          </button>
+          {isAnnualOpen && (
+            <MetricCard label="Anual" data={metrics.annual} period="annual" />
+          )}
         </div>
       </div>
       
@@ -1262,7 +1563,7 @@ const HeaderMetric = ({ label, data, theme, showAsPercentage = false, accountBal
             <span className={clsx("text-xs", theme.bgCard, "px-2 py-1 rounded", theme.textSec)}>{data.count} Trades</span>
           </div>
           <div className="flex items-center gap-6 justify-center">
-             <div className="flex-shrink-0"><DonutChart wins={data.wins} losses={data.losses} breakEven={data.breakEven || 0} size={70} theme={theme} /></div>
+             <div className="flex-shrink-0"><DonutChart wins={data.wins} losses={data.losses} breakEven={data.breakEven || 0} size={70} theme={theme} percentageType="winRate" profitPercentage={percentage} /></div>
              <div className="flex flex-col gap-2 text-xs w-full">
                 <div className="flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500"></div><span className={theme.textSec}>Wins</span></div><span className="text-emerald-400 font-bold">{data.wins}</span></div>
                 <div className="flex items-center justify-between"><div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-rose-500"></div><span className={theme.textSec}>Losses</span></div><span className="text-rose-400 font-bold">{data.losses}</span></div>
@@ -2009,7 +2310,8 @@ export default function TradingJournalApp() {
   const handleBackToDashboard = () => setSelectedDate(null);
   const handleAddEntry = async (e) => {
     e.preventDefault();
-    if (!formState.pair || !formState.pnl) return;
+    // Allow "0" as valid pnl value for break even trades
+    if (!formState.pair || formState.pnl === '' || formState.pnl === undefined) return;
     const newEntry = { 
       id: Date.now(), date: selectedDate.toISOString(), pair: formState.pair.toUpperCase(), type: formState.type, 
       rr: formState.rr || '1:1', pnl: parseFloat(formState.pnl), notes: formState.notes, screenshotUrl: formState.screenshotUrl
@@ -2073,7 +2375,8 @@ export default function TradingJournalApp() {
       pair: entry.pair,
       type: entry.type,
       rr: entry.rr,
-      pnl: entry.pnl.toString(),
+      // Preserve 0 values for break even trades
+      pnl: entry.pnl != null ? entry.pnl.toString() : '',
       notes: entry.notes || '',
       screenshotUrl: entry.screenshotUrl || ''
     });
@@ -2082,7 +2385,8 @@ export default function TradingJournalApp() {
   };
   const handleUpdateEntry = async (e) => {
     e.preventDefault();
-    if (!formState.pair || !formState.pnl || !editingEntry) return;
+    // Allow "0" as valid pnl value for break even trades
+    if (!formState.pair || formState.pnl === '' || formState.pnl === undefined || !editingEntry) return;
     const updatedEntry = {
       ...editingEntry,
       pair: formState.pair.toUpperCase(),

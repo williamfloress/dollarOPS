@@ -471,21 +471,39 @@ export const loadJournalDataFromSupabase = async (userId) => {
 
     // Transform data to match expected format
     const data = {
-      entries: (entries || []).map(entry => ({
-        id: entry.id,
-        date: entry.date,
-        // Convert 'operation' to undefined for backward compatibility with UI code
-        // UI code checks !entry.entryType to identify trading entries
-        entryType: entry.entry_type === 'operation' ? undefined : (entry.entry_type || undefined),
-        pair: entry.pair || undefined,
-        type: entry.type || undefined,
-        rr: entry.rr || undefined,
-        pnl: entry.pnl || undefined,
-        notes: entry.notes || undefined,
-        screenshotUrl: entry.screenshot_url || undefined,
-        message: entry.message || undefined,
-        tradingViewUrl: entry.trading_view_url || undefined,
-      })),
+      entries: (entries || []).map(entry => {
+        // Determine if this is a trading entry (has pair, type, rr) vs non-trading (thought, dayoff)
+        const isTradingEntry = entry.entry_type === 'operation' || 
+                               (!entry.entry_type && (entry.pair || entry.type || entry.rr));
+        
+        // For trading entries with null pnl, assume break even (0)
+        // This fixes existing entries that lost their 0 value
+        let pnlValue = entry.pnl;
+        if (isTradingEntry && (entry.pnl === null || entry.pnl === undefined)) {
+          pnlValue = 0;
+        } else if (entry.pnl != null) {
+          pnlValue = entry.pnl;
+        } else {
+          pnlValue = undefined;
+        }
+        
+        return {
+          id: entry.id,
+          date: entry.date,
+          // Convert 'operation' to undefined for backward compatibility with UI code
+          // UI code checks !entry.entryType to identify trading entries
+          entryType: entry.entry_type === 'operation' ? undefined : (entry.entry_type || undefined),
+          pair: entry.pair || undefined,
+          type: entry.type || undefined,
+          rr: entry.rr || undefined,
+          // Preserve 0 values for break even trades, and fix null values for trading entries
+          pnl: pnlValue,
+          notes: entry.notes || undefined,
+          screenshotUrl: entry.screenshot_url || undefined,
+          message: entry.message || undefined,
+          tradingViewUrl: entry.trading_view_url || undefined,
+        };
+      }),
       availablePairs: (pairs || []).map(p => p.pair),
       motivationalImages: (images || []).map(img => ({
         id: parseFloat(img.id),
@@ -542,7 +560,8 @@ export const saveJournalDataToSupabase = async (userId, journalData) => {
         pair: entry.pair || null,
         type: entry.type || null,
         rr: entry.rr || null,
-        pnl: entry.pnl || null,
+        // Preserve 0 values for break even trades (0 is falsy, so use != null check)
+        pnl: entry.pnl != null ? entry.pnl : null,
         notes: entry.notes || null,
         screenshot_url: entry.screenshotUrl || null,
         message: entry.message || null,
