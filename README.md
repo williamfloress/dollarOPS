@@ -1,30 +1,30 @@
-# 📊 DollarOPS Trading Journal
+# DollarOPS Trading Journal
 
 Una aplicación web moderna y profesional para llevar un registro detallado de tus operaciones de trading. Diseñada con una interfaz intuitiva y múltiples temas personalizables, DollarOPS Trading Journal te ayuda a analizar tu rendimiento y mejorar tus estrategias de trading.
 
-## ✨ Características Principales
+## Características Principales
 
-### 🔐 Autenticación y Usuarios
+### Autenticación y Usuarios
 - **Sistema de autenticación completo**: Registro, inicio de sesión y recuperación de contraseña
 - **Integración con Supabase** (opcional): Almacenamiento en la nube y sincronización entre dispositivos
 - **Modo local**: Funciona sin configuración adicional usando localStorage
 - **Perfil de usuario**: Configuración personalizada por usuario
 - **Sesión persistente**: Mantén tu sesión activa entre visitas
 
-### 📝 Gestión de Operaciones
+### Gestión de Operaciones
 - **Registro de operaciones**: Crea, edita y elimina entradas de trading con información detallada
 - **Vista de calendario**: Navega fácilmente por tus operaciones usando el calendario integrado
 - **Filtros avanzados**: Filtra operaciones por fecha, par de divisas, resultado (ganancia/pérdida)
 - **Estadísticas en tiempo real**: Visualiza métricas clave como ganancias totales, ratio de aciertos, mejor/peor operación
 - **Gráficos de rendimiento**: Visualización de métricas con gráficos interactivos
 
-### 🎨 Personalización
+### Personalización
 - **Múltiples temas**: 6 temas oscuros y 6 temas claros para adaptar la interfaz a tu preferencia
 - **Título personalizable**: Personaliza el nombre de tu journal
 - **Tablero de visión**: Agrega imágenes motivacionales para mantenerte enfocado en tus objetivos
 - **Almacenamiento de imágenes**: Las imágenes se guardan en Supabase Storage (si está configurado) o en localStorage
 
-### 📈 Análisis y Métricas
+### Análisis y Métricas
 - **Dashboard de estadísticas**: 
   - Ganancia/pérdida total
   - Número de operaciones ganadoras vs perdedoras
@@ -35,7 +35,7 @@ Una aplicación web moderna y profesional para llevar un registro detallado de t
 - **Análisis por par de divisas**: Estadísticas desglosadas por instrumento de trading
 - **Métricas avanzadas**: Análisis detallado de tu rendimiento de trading
 
-### 💾 Persistencia de Datos
+### Persistencia de Datos
 - **Almacenamiento flexible**: 
   - **Modo local**: Todos tus datos se guardan automáticamente en el navegador (localStorage)
   - **Modo Supabase**: Sincronización en la nube con base de datos PostgreSQL
@@ -44,12 +44,12 @@ Una aplicación web moderna y profesional para llevar un registro detallado de t
 - **Sincronización automática**: Los cambios se guardan automáticamente sin necesidad de guardar manualmente
 - **Migración de datos**: Herramientas para migrar de localStorage a Supabase
 
-### 📱 Diseño Responsive
+### Diseño Responsive
 - **Interfaz adaptativa**: Funciona perfectamente en escritorio, tablet y móvil
 - **Navegación optimizada**: Menús y controles adaptados para diferentes tamaños de pantalla
 - **Experiencia táctil**: Optimizado para dispositivos táctiles
 
-## 🛠️ Stack Tecnológico
+## Stack Tecnológico
 
 ### Frontend
 - **React 19**: Framework de UI moderno y eficiente
@@ -78,7 +78,7 @@ Una aplicación web moderna y profesional para llevar un registro detallado de t
 - `postcss`: Procesador CSS
 - `autoprefixer`: Agregar prefijos CSS automáticamente
 
-## 🚀 Instalación
+## Instalación
 
 ### Requisitos Previos
 - **Node.js** (versión LTS recomendada) - [Descargar Node.js](https://nodejs.org/)
@@ -117,7 +117,7 @@ Una aplicación web moderna y profesional para llevar un registro detallado de t
    - La aplicación se abrirá automáticamente en `http://localhost:5173`
    - Si no se abre automáticamente, navega manualmente a esa URL
 
-## ⚙️ Configuración de Supabase (Opcional)
+## Configuración de Supabase (Opcional)
 
 La aplicación puede funcionar completamente en modo local, pero si deseas usar autenticación y sincronización en la nube, necesitas configurar Supabase:
 
@@ -131,7 +131,7 @@ Para más detalles, consulta la documentación en la carpeta `documentation/`:
 - `database-schema-with-users.md`: Esquema de base de datos
 - `user-login-implementation-guide.md`: Guía de implementación de autenticación
 
-## 📖 Uso
+## Uso
 
 ### Primera Vez
 
@@ -182,7 +182,7 @@ Si tienes Supabase configurado:
 - **Cambiar contraseña**: Opción disponible en la configuración de perfil
 - **Recuperar contraseña**: Usa la opción "¿Olvidaste tu contraseña?" en el login
 
-## 📁 Estructura del Proyecto
+## Estructura del Proyecto
 
 ```
 tjournal/
@@ -228,13 +228,13 @@ tjournal/
 └── README.md                     # Este archivo
 ```
 
-## 🔧 Scripts Disponibles
+## Scripts Disponibles
 
 - `npm run dev`: Inicia el servidor de desarrollo con hot-reload en `http://localhost:5173`
 - `npm run build`: Construye la aplicación para producción (genera carpeta `dist/`)
 - `npm run preview`: Previsualiza el build de producción localmente
 
-## 🖥️ Convertir a Aplicación de Escritorio
+## Convertir a Aplicación de Escritorio
 
 Esta aplicación puede convertirse en una aplicación de escritorio (.exe para Windows, .app para Mac, .AppImage para Linux) usando Electron. Consulta el archivo `documentation/guide.md` para instrucciones detalladas paso a paso.
 
@@ -247,7 +247,7 @@ Esta aplicación puede convertirse en una aplicación de escritorio (.exe para W
 3. Modificar `package.json` con scripts de Electron
 4. Ejecutar `npm run dist` para generar el ejecutable
 
-## 🎯 Características Técnicas
+## Características Técnicas
 
 ### Persistencia de Datos
 
@@ -297,7 +297,7 @@ Esta aplicación puede convertirse en una aplicación de escritorio (.exe para W
 - Tokens JWT para sesiones seguras
 - Encriptación de contraseñas (manejado por Supabase)
 
-## 📚 Documentación Adicional
+## Documentación Adicional
 
 El proyecto incluye documentación detallada en la carpeta `documentation/`:
 
@@ -311,7 +311,7 @@ El proyecto incluye documentación detallada en la carpeta `documentation/`:
 - **`resetpassword.md`**: Guía de recuperación de contraseña
 - **`guide.md`**: Guía para convertir a aplicación de escritorio
 
-## 📝 Notas de Desarrollo
+## Notas de Desarrollo
 
 - La aplicación utiliza **React Hooks** para el manejo de estado
 - Los datos se persisten automáticamente en cada cambio
@@ -326,7 +326,7 @@ El proyecto incluye documentación detallada en la carpeta `documentation/`:
 - **Componentes modulares**: Autenticación y perfil en componentes separados
 - **Estilos con Tailwind**: Diseño utility-first con configuración personalizada
 
-## 🔄 Migración de Datos
+## Migración de Datos
 
 ### De LocalStorage a Supabase
 Si ya tienes datos en localStorage y quieres migrar a Supabase:
@@ -337,7 +337,7 @@ Si ya tienes datos en localStorage y quieres migrar a Supabase:
 
 Para más detalles, consulta `documentation/image-storage-migration-guide.md`.
 
-## 🐛 Solución de Problemas
+## Solución de Problemas
 
 ### La aplicación no inicia
 - Verifica que Node.js esté instalado: `node --version`
@@ -355,19 +355,19 @@ Para más detalles, consulta `documentation/image-storage-migration-guide.md`.
 - Si usas modo privado/incógnito, algunos navegadores bloquean localStorage
 - Verifica la consola del navegador para errores
 
-## 👤 Autor
+## Autor
 
 **williamfloress.dev**
 
-## 📄 Licencia
+## Licencia
 
 Este proyecto es privado. Todos los derechos reservados.
 
-## 🤝 Contribuciones
+## Contribuciones
 
 Este es un proyecto personal. Si deseas contribuir o reportar problemas, por favor abre un issue en el repositorio.
 
-## 📞 Soporte
+## Soporte
 
 Para preguntas o problemas:
 - Revisa la documentación en `documentation/`
@@ -378,4 +378,4 @@ Para preguntas o problemas:
 
 **Versión**: 0.1.0
 
-¡Feliz trading! 📈
+¡Feliz trading!
