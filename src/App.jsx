@@ -1979,7 +1979,6 @@ export default function TradingJournalApp() {
 
   // Estados temporales (UI)
   const [isDragging, setIsDragging] = useState(false);
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
   const [showSidebar, setShowSidebar] = useState(false); // Mobile sidebar toggle (vision board)
@@ -2002,6 +2001,7 @@ export default function TradingJournalApp() {
   // Track settings state for unsaved changes detection
   const [settingsBalance, setSettingsBalance] = useState(0); // Can be number or empty string while typing
   const [settingsTheme, setSettingsTheme] = useState('slate_blue');
+  const [settingsTitle, setSettingsTitle] = useState('');
   const [isSlideshowActive, setIsSlideshowActive] = useState(false);
   const [slideshowIndex, setSlideshowIndex] = useState(0);
   const [showPairSelectionModal, setShowPairSelectionModal] = useState(false);
@@ -2225,6 +2225,19 @@ export default function TradingJournalApp() {
     }
   }, [currentTheme]);
 
+  // Trade outcome: prioritize R:R selection over PnL sign
+  const getTradeOutcome = (entry, pnl) => {
+    const rr = typeof entry?.rr === 'string' ? entry.rr.trim().toUpperCase() : '';
+    if (rr === 'BE' || rr === 'BREAK-EVEN' || rr === 'BREAK EVEN') return 'BREAK-EVEN';
+    if (rr === 'SL' || rr === 'STOP LOSS' || rr === 'STOP-LOSS') return 'LOSS';
+    if (rr) return 'WIN';
+
+    // Fallback for old/invalid entries: use PnL sign
+    if (pnl > 0) return 'WIN';
+    if (pnl < 0) return 'LOSS';
+    return 'BREAK-EVEN';
+  };
+
   // Métricas
   const metrics = useMemo(() => {
     const currentYear = currentDate.getFullYear();
@@ -2250,9 +2263,10 @@ export default function TradingJournalApp() {
       // Safety check: skip if pnl is not a valid number
       if (isNaN(pnl)) return;
       
-      const isWin = pnl > 0;
-      const isLoss = pnl < 0;
-      const isBreakEven = pnl === 0;
+      const outcome = getTradeOutcome(entry, pnl);
+      const isWin = outcome === 'WIN';
+      const isLoss = outcome === 'LOSS';
+      const isBreakEven = outcome === 'BREAK-EVEN';
       const updateStat = (statObj) => {
         statObj.val += pnl;
         statObj.count++;
@@ -2352,15 +2366,7 @@ export default function TradingJournalApp() {
     setEntries(updatedEntries);
     await saveAllJournalData({ entries: updatedEntries });
   };
-  
-  const handleTitleChange = (e) => {
-    setAppTitle(e.target.value);
-  };
-  
-  const handleTitleBlur = async () => {
-    setIsEditingTitle(false);
-    await saveAllJournalData({ appTitle });
-  };
+
   const handleViewEntry = (entry) => {
     // Safety check: only view trading entries (not thoughts or dayoff)
     if (entry.entryType === 'thought' || entry.entryType === 'dayoff') return;
@@ -3028,7 +3034,7 @@ export default function TradingJournalApp() {
     const headers = ["ID,Fecha,Hora,Par,Tipo,R:R,Resultado ($),Estado,Notas,URL Captura"];
     const rows = tradingEntries.map(e => {
       const dateObj = new Date(e.date);
-      const status = e.pnl > 0 ? "WIN" : e.pnl < 0 ? "LOSS" : "BREAK-EVEN";
+      const status = getTradeOutcome(e, parseFloat(e.pnl));
       const safeNotes = e.notes ? `"${e.notes.replace(/"/g, '""')}"` : '""';
       const safeUrl = e.screenshotUrl ? `"${e.screenshotUrl}"` : '""';
       return `${e.id},${dateObj.toLocaleDateString('es-ES')},${dateObj.toLocaleTimeString('es-ES')},"${e.pair}",${e.type},${e.rr},${e.pnl},${status},${safeNotes},${safeUrl}`;
@@ -3308,7 +3314,9 @@ export default function TradingJournalApp() {
       <header className={clsx("h-auto min-h-14 lg:min-h-20", theme.bgSec, "border-b", theme.borderSec, "px-3 lg:px-6 py-2 lg:py-0 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-2 lg:gap-0 shrink-0 z-20 relative shadow-md")}>
         <div className="flex items-center gap-2 lg:gap-4 w-full lg:w-auto">
           <div className="flex-1 lg:flex-none min-w-0 flex items-center gap-2">
-            {isEditingTitle ? (<Input value={appTitle} onChange={handleTitleChange} onBlur={handleTitleBlur} autoFocus theme={theme} />) : (<div className="flex items-center gap-2 cursor-pointer group" onClick={() => setIsEditingTitle(true)}><h1 className={clsx("text-base lg:text-xl font-bold truncate", theme.textMain, theme.accentText, "hover:opacity-80 transition-colors")}>{appTitle}</h1><Edit2 size={12} className={clsx(theme.textMuted, "opacity-0 group-hover:opacity-100 transition-opacity shrink-0")} /></div>)}
+            <h1 className={clsx("text-sm sm:text-base lg:text-xl font-bold truncate", theme.textMain, theme.accentText)}>
+              {appTitle}
+            </h1>
             {isSaving && (
               <div className="flex items-center gap-2 text-xs" title="Saving...">
                 <div className={`animate-spin rounded-full h-3 w-3 border-b-2 ${theme.accentBorder}`}></div>
@@ -3346,6 +3354,7 @@ export default function TradingJournalApp() {
               onClick={() => {
                 setSettingsBalance(accountBalance);
                 setSettingsTheme(currentTheme);
+                setSettingsTitle(appTitle);
                 setShowSettings(true);
                 if (showSettings === false) {
                   const currentThemeType = THEMES[currentTheme]?.type || 'dark';
@@ -3358,17 +3367,6 @@ export default function TradingJournalApp() {
             >
               <Settings size={20} />
             </button>
-            {/* Sign Out button - Mobile/Tablet */}
-            {isSupabaseConfigured() && user && (
-              <button
-                onClick={handleSignOut}
-                className={`p-2.5 ${theme.bgCard} rounded-lg border ${theme.border} text-red-400 hover:text-red-300 hover:${theme.bgSec} active:scale-95 transition-all`}
-                title="Cerrar Sesión"
-                aria-label="Cerrar Sesión"
-              >
-                <LogOut size={20} />
-              </button>
-            )}
           </div>
         </div>
         {/* Metrics - Hidden on mobile/tablet/laptop, shown on xl screens */}
@@ -3414,6 +3412,7 @@ export default function TradingJournalApp() {
             <Button variant="ghost" size="icon" onClick={() => {
               setSettingsBalance(accountBalance);
               setSettingsTheme(currentTheme);
+              setSettingsTitle(appTitle);
               setShowSettings(!showSettings);
               if (showSettings === false) {
                 const currentThemeType = THEMES[currentTheme]?.type || 'dark';
@@ -3448,7 +3447,10 @@ export default function TradingJournalApp() {
             <button 
               onClick={() => {
                 // Check for unsaved changes
-                const hasChanges = settingsBalance !== accountBalance || settingsTheme !== currentTheme;
+                const hasChanges =
+                  settingsBalance !== accountBalance ||
+                  settingsTheme !== currentTheme ||
+                  (settingsTitle || '').trim() !== (appTitle || '').trim();
                 if (hasChanges) {
                   setShowSettingsCloseConfirm(true);
                 } else {
@@ -3462,6 +3464,18 @@ export default function TradingJournalApp() {
             </button>
           </div>
           <div className="space-y-6">
+            <div>
+              <Input
+                label="Título del Journal"
+                value={settingsTitle}
+                onChange={(e) => setSettingsTitle(e.target.value)}
+                placeholder="Ej: WJT 2026"
+                theme={theme}
+              />
+              <p className={`text-xs ${theme.textMuted} mt-2`}>
+                Se mostrará en la barra superior.
+              </p>
+            </div>
             <div>
               <Input 
                 label="Balance Inicial ($)" 
@@ -3641,10 +3655,12 @@ export default function TradingJournalApp() {
               onClick={async () => {
                 // Save changes
                 const newBalance = typeof settingsBalance === 'number' ? settingsBalance : parseFloat(settingsBalance) || 0;
+                  const newTitle = (settingsTitle || '').trim() || 'ProTrader Journal';
                 setAccountBalance(newBalance);
                 setCurrentTheme(settingsTheme);
+                  setAppTitle(newTitle);
                 setShowSettings(false);
-                await saveAllJournalData({ accountBalance: newBalance, currentTheme: settingsTheme });
+                  await saveAllJournalData({ accountBalance: newBalance, currentTheme: settingsTheme, appTitle: newTitle });
               }} 
               theme={theme} 
               className="w-full"
@@ -3872,6 +3888,9 @@ export default function TradingJournalApp() {
             <div className={`${theme.bgSec} border ${theme.border} rounded-lg p-4 mb-6`}>
               <p className={`text-sm ${theme.textMain} mb-2`}>Los siguientes cambios se perderán:</p>
               <ul className={`text-xs ${theme.textSec} space-y-1 list-disc list-inside`}>
+                {(settingsTitle || '').trim() !== (appTitle || '').trim() && (
+                  <li>Título: {(appTitle || '').trim() || 'ProTrader Journal'} → {(settingsTitle || '').trim() || 'ProTrader Journal'}</li>
+                )}
                 {settingsBalance !== accountBalance && (
                   <li>Balance Inicial: {accountBalance} → {typeof settingsBalance === 'number' ? settingsBalance : settingsBalance || 0}</li>
                 )}
@@ -3885,6 +3904,7 @@ export default function TradingJournalApp() {
                 variant="ghost" 
                 onClick={() => {
                   // Discard changes - reset to original values
+                  setSettingsTitle(appTitle);
                   setSettingsBalance(accountBalance);
                   setSettingsTheme(currentTheme);
                   setShowSettingsCloseConfirm(false);
@@ -3899,11 +3919,13 @@ export default function TradingJournalApp() {
                 onClick={async () => {
                   // Save changes and close
                   const newBalance = typeof settingsBalance === 'number' ? settingsBalance : parseFloat(settingsBalance) || 0;
+                  const newTitle = (settingsTitle || '').trim() || 'ProTrader Journal';
                   setAccountBalance(newBalance);
                   setCurrentTheme(settingsTheme);
+                  setAppTitle(newTitle);
                   setShowSettingsCloseConfirm(false);
                   setShowSettings(false);
-                  await saveAllJournalData({ accountBalance: newBalance, currentTheme: settingsTheme });
+                  await saveAllJournalData({ accountBalance: newBalance, currentTheme: settingsTheme, appTitle: newTitle });
                 }} 
                 theme={theme} 
                 className="flex-1"
