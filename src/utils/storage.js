@@ -84,19 +84,40 @@ export const loadJournalData = async () => {
       return { data: null, error };
     }
 
-    // Return Supabase data (even if empty for new users)
-    return { 
-      data: data || {
-        entries: [],
-        availablePairs: [],
-        motivationalImages: [],
-        appTitle: 'ProTrader Journal',
-        accountBalance: 0,
-        currentTheme: 'slate_blue',
-        initialized: false
-      }, 
-      error: null 
+    // Default challenge settings and state (used when no data or new user)
+    const defaultChallengeSettings = {
+      enabled: false,
+      phase1TargetPercent: 8,
+      phase2TargetPercent: 12,
+      dailyLossLimitPercent: 5,
+      totalLossLimitPercent: 5,
+      startingBalance: null,
+      challengeStartDate: null,
     };
+    const defaultChallengeState = {
+      phase1PassedAt: null,
+      phase2PassedAt: null,
+      highWaterMark: null,
+      dayStartBalance: null,
+      dayStartDate: null,
+      referenceBalance: null,
+    };
+
+    // Return Supabase data (even if empty for new users)
+    const resolved = data || {
+      entries: [],
+      availablePairs: [],
+      motivationalImages: [],
+      appTitle: 'ProTrader Journal',
+      accountBalance: 0,
+      currentTheme: 'slate_blue',
+      initialized: false,
+      challengeSettings: defaultChallengeSettings,
+      challengeState: defaultChallengeState,
+    };
+    if (!resolved.challengeSettings) resolved.challengeSettings = defaultChallengeSettings;
+    if (!resolved.challengeState) resolved.challengeState = defaultChallengeState;
+    return { data: resolved, error: null };
   } catch (error) {
     console.error('Error loading journal data:', error);
     return { data: null, error };
@@ -115,7 +136,7 @@ export const clearJournalData = async () => {
       return { success: false, error: modeError || new Error('User not authenticated') };
     }
 
-    // Clear all data by saving empty structure
+    // Clear all data by saving empty structure (challenge settings/state preserved from current load or defaults)
     const emptyData = {
       entries: [],
       availablePairs: [],
@@ -123,7 +144,24 @@ export const clearJournalData = async () => {
       appTitle: 'ProTrader Journal',
       accountBalance: 0,
       currentTheme: 'slate_blue',
-      initialized: false
+      initialized: false,
+      challengeSettings: {
+        enabled: false,
+        phase1TargetPercent: 8,
+        phase2TargetPercent: 12,
+        dailyLossLimitPercent: 5,
+        totalLossLimitPercent: 5,
+        startingBalance: null,
+        challengeStartDate: null,
+      },
+      challengeState: {
+        phase1PassedAt: null,
+        phase2PassedAt: null,
+        highWaterMark: null,
+        dayStartBalance: null,
+        dayStartDate: null,
+        referenceBalance: null,
+      },
     };
 
     const { success, error } = await saveJournalDataToSupabase(userId, emptyData);

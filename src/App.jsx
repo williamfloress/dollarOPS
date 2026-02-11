@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { 
   Calendar, 
   TrendingUp, 
@@ -37,7 +37,8 @@ import {
   Brain,
   CalendarX,
   LogOut,
-  User
+  User,
+  Trophy
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -59,6 +60,7 @@ import {
 import { getStorageMode } from './utils/storage.js';
 import { Auth } from './components/Auth';
 import { ProfileSettings } from './components/ProfileSettings';
+import { ChallengeProgress } from './components/ChallengeProgress';
 
 // --- DEFINICIÓN DE TEMAS ---
 const THEMES = {
@@ -2002,6 +2004,43 @@ export default function TradingJournalApp() {
   const [settingsBalance, setSettingsBalance] = useState(0); // Can be number or empty string while typing
   const [settingsTheme, setSettingsTheme] = useState('slate_blue');
   const [settingsTitle, setSettingsTitle] = useState('');
+  // Challenge mode: settings (persisted) and run state (persisted)
+  const defaultChallengeSettings = {
+    enabled: false,
+    phase1TargetPercent: 8,
+    phase2TargetPercent: 12,
+    dailyLossLimitPercent: 5,
+    totalLossLimitPercent: 5,
+    startingBalance: null,
+    challengeStartDate: null,
+  };
+  const defaultChallengeState = {
+    phase1PassedAt: null,
+    phase2PassedAt: null,
+    highWaterMark: null,
+    dayStartBalance: null,
+    dayStartDate: null,
+    referenceBalance: null,
+  };
+  const [challengeSettings, setChallengeSettings] = useState(() => defaultChallengeSettings);
+  const [challengeState, setChallengeState] = useState(() => defaultChallengeState);
+  const [settingsChallenge, setSettingsChallenge] = useState(() => ({ ...defaultChallengeSettings }));
+  const [showPhase1PassedToast, setShowPhase1PassedToast] = useState(false);
+  const [showPhase2CongratsModal, setShowPhase2CongratsModal] = useState(false);
+  const [showNearLossToast, setShowNearLossToast] = useState(false);
+  const [showChallengeFailedModal, setShowChallengeFailedModal] = useState(false);
+  const lastNearLossWarningAt = useRef(null);
+  const prevChallengeEnabledRef = useRef(false);
+  const [settingsSectionsExpanded, setSettingsSectionsExpanded] = useState({
+    general: true,
+    theme: false,
+    challenge: false,
+    pairs: false,
+    importExport: false,
+    account: false,
+    danger: false,
+  });
+  const toggleSettingsSection = (key) => setSettingsSectionsExpanded((s) => ({ ...s, [key]: !s[key] }));
   const [isSlideshowActive, setIsSlideshowActive] = useState(false);
   const [slideshowIndex, setSlideshowIndex] = useState(0);
   const [showPairSelectionModal, setShowPairSelectionModal] = useState(false);
@@ -2124,7 +2163,9 @@ export default function TradingJournalApp() {
         appTitle: updates.appTitle !== undefined ? updates.appTitle : appTitle,
         accountBalance: updates.accountBalance !== undefined ? updates.accountBalance : accountBalance,
         currentTheme: updates.currentTheme !== undefined ? updates.currentTheme : currentTheme,
-        initialized: true
+        initialized: true,
+        challengeSettings: updates.challengeSettings !== undefined ? updates.challengeSettings : challengeSettings,
+        challengeState: updates.challengeState !== undefined ? updates.challengeState : challengeState,
       });
 
       if (!success && error) {
@@ -2318,6 +2359,134 @@ export default function TradingJournalApp() {
       currentBalance: accountBalance + stats.annual.val 
     };
   }, [entries, currentDate, selectedDate, accountBalance]);
+
+  // Challenge mode: reference balance, profit %, daily loss %, total loss % (drawdown)
+  const challengeMetrics = useMemo(() => {
+    const currentBalance = metrics.currentBalance;
+    const ref = challengeSettings.startingBalance ?? challengeState.referenceBalance;
+    const referenceBalance = (ref != null && ref !== undefined) ? ref : (challengeSettings.enabled ? currentBalance : null);
+    let profitPercent = null;
+    if (challengeSettings.enabled && referenceBalance != null && referenceBalance > 0 && typeof currentBalance === 'number') {
+      profitPercent = ((currentBalance - referenceBalance) / referenceBalance) * 100;
+    }
+    // Daily loss: derive "balance at start of today" from current balance minus today's PnL (no persisted dayStart needed)
+    const today = new Date();
+    const todayPnL = entries
+      .filter((e) => e.pnl != null && !isNaN(parseFloat(e.pnl)) && e.entryType !== 'thought' && e.entryType !== 'dayoff')
+      .filter((e) => isSameDay(new Date(e.date), today))
+      .reduce((sum, e) => sum + parseFloat(e.pnl), 0);
+    const dayStartBalanceForToday = typeof currentBalance === 'number' ? currentBalance - todayPnL : null;
+    let dailyLossPercent = 0;
+    if (challengeSettings.enabled && dayStartBalanceForToday != null && dayStartBalanceForToday > 0 && typeof currentBalance === 'number' && currentBalance < dayStartBalanceForToday) {
+      dailyLossPercent = ((dayStartBalanceForToday - currentBalance) / dayStartBalanceForToday) * 100;
+    }
+    const hwm = challengeState.highWaterMark ?? referenceBalance;
+    let totalLossPercent = 0;
+    if (challengeSettings.enabled && hwm != null && hwm > 0 && typeof currentBalance === 'number' && currentBalance < hwm) {
+      totalLossPercent = ((hwm - currentBalance) / hwm) * 100;
+    }
+    return {
+      referenceBalance: challengeSettings.enabled ? referenceBalance : null,
+      currentBalance: challengeSettings.enabled ? currentBalance : null,
+      profitPercent: profitPercent ?? 0,
+      dailyLossPercent,
+      totalLossPercent,
+    };
+  }, [challengeSettings.enabled, challengeSettings.startingBalance, challengeState.referenceBalance, challengeState.highWaterMark, metrics.currentBalance, entries]);
+
+  // When challenge is enabled with "use current balance", snapshot reference balance once
+  useEffect(() => {
+    if (!challengeSettings.enabled || challengeSettings.startingBalance != null) return;
+    if (challengeState.referenceBalance != null && challengeState.referenceBalance !== undefined) return;
+    if (typeof metrics.currentBalance !== 'number') return;
+    setChallengeState((s) => ({ ...s, referenceBalance: metrics.currentBalance }));
+  }, [challengeSettings.enabled, challengeSettings.startingBalance, challengeState.referenceBalance, metrics.currentBalance]);
+
+  // Update high water mark when current balance exceeds it
+  useEffect(() => {
+    if (!challengeSettings.enabled || typeof metrics.currentBalance !== 'number') return;
+    const ref = challengeSettings.startingBalance ?? challengeState.referenceBalance ?? metrics.currentBalance;
+    const hwm = challengeState.highWaterMark ?? ref;
+    if (metrics.currentBalance > hwm) {
+      setChallengeState((s) => ({ ...s, highWaterMark: metrics.currentBalance }));
+    }
+  }, [challengeSettings.enabled, challengeSettings.startingBalance, challengeState.referenceBalance, challengeState.highWaterMark, metrics.currentBalance]);
+
+  // When challenge is turned ON, start a fresh run so profit % uses current capital (fixes wrong % after reset/re-enable)
+  useEffect(() => {
+    const enabled = challengeSettings.enabled;
+    const wasEnabled = prevChallengeEnabledRef.current;
+    if (enabled && !wasEnabled) {
+      const refBalance = challengeSettings.startingBalance != null ? challengeSettings.startingBalance : (typeof metrics.currentBalance === 'number' ? metrics.currentBalance : null);
+      const freshState = {
+        ...defaultChallengeState,
+        referenceBalance: refBalance,
+      };
+      setChallengeState(freshState);
+      saveAllJournalData({ challengeState: freshState });
+    }
+    prevChallengeEnabledRef.current = enabled;
+  }, [challengeSettings.enabled, challengeSettings.startingBalance, metrics.currentBalance]);
+
+  // Step 5: Alert logic — Phase 1 passed, Phase 2 passed, Near loss warning (throttled)
+  useEffect(() => {
+    if (!challengeSettings.enabled) return;
+    const now = new Date().toISOString();
+    const { profitPercent, dailyLossPercent, totalLossPercent } = challengeMetrics;
+    const p1Target = challengeSettings.phase1TargetPercent;
+    const p2Target = challengeSettings.phase2TargetPercent;
+    const dailyLimit = challengeSettings.dailyLossLimitPercent;
+    const totalLimit = challengeSettings.totalLossLimitPercent;
+    const p1Passed = !!challengeState.phase1PassedAt;
+    const p2Passed = !!challengeState.phase2PassedAt;
+
+    if (typeof profitPercent === 'number' && profitPercent >= p2Target && !p2Passed) {
+      const newState = {
+        ...challengeState,
+        phase1PassedAt: challengeState.phase1PassedAt || now,
+        phase2PassedAt: now,
+      };
+      setChallengeState(newState);
+      saveAllJournalData({ challengeState: newState });
+      setShowPhase2CongratsModal(true);
+      return;
+    }
+    if (typeof profitPercent === 'number' && profitPercent >= p1Target && !p1Passed) {
+      const newState = { ...challengeState, phase1PassedAt: now };
+      setChallengeState(newState);
+      saveAllJournalData({ challengeState: newState });
+      setShowPhase1PassedToast(true);
+      return;
+    }
+    const failedDaily = dailyLimit > 0 && typeof dailyLossPercent === 'number' && dailyLossPercent >= dailyLimit;
+    const failedTotal = totalLimit > 0 && typeof totalLossPercent === 'number' && totalLossPercent >= totalLimit;
+    if (failedDaily || failedTotal) {
+      setShowChallengeFailedModal(true);
+      return;
+    }
+    const warningThreshold = 0.8;
+    const nearDaily = dailyLimit > 0 && dailyLossPercent >= dailyLimit * warningThreshold;
+    const nearTotal = totalLimit > 0 && totalLossPercent >= totalLimit * warningThreshold;
+    if (nearDaily || nearTotal) {
+      const throttleMs = 120000;
+      const last = lastNearLossWarningAt.current;
+      if (last == null || Date.now() - last >= throttleMs) {
+        lastNearLossWarningAt.current = Date.now();
+        setShowNearLossToast(true);
+      }
+    }
+  }, [
+    challengeSettings.enabled,
+    challengeSettings.phase1TargetPercent,
+    challengeSettings.phase2TargetPercent,
+    challengeSettings.dailyLossLimitPercent,
+    challengeSettings.totalLossLimitPercent,
+    challengeMetrics.profitPercent,
+    challengeMetrics.dailyLossPercent,
+    challengeMetrics.totalLossPercent,
+    challengeState.phase1PassedAt,
+    challengeState.phase2PassedAt,
+  ]);
 
   // Handlers
   const handleDayClick = (day) => setSelectedDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day));
@@ -2787,6 +2956,9 @@ export default function TradingJournalApp() {
           if (data.appTitle) setAppTitle(data.appTitle);
           if (data.accountBalance !== undefined) setAccountBalance(data.accountBalance);
           if (data.currentTheme) setCurrentTheme(data.currentTheme);
+          setChallengeSettings({ ...defaultChallengeSettings, ...(data.challengeSettings || {}) });
+          setChallengeState({ ...defaultChallengeState, ...(data.challengeState || {}) });
+          prevChallengeEnabledRef.current = !!(data.challengeSettings && data.challengeSettings.enabled);
           
           // Use initialized field from Supabase
           if (isSupabaseConfigured() && user) {
@@ -2849,13 +3021,15 @@ export default function TradingJournalApp() {
         accountBalance,
         currentTheme,
         // For Supabase users, initialized should be true if not first time
-        initialized: isSupabaseConfigured() && user ? true : false
+        initialized: isSupabaseConfigured() && user ? true : false,
+        challengeSettings,
+        challengeState,
       };
       saveJournalData(allData);
     }, 1000); // Save 1 second after last change
 
     return () => clearTimeout(saveTimeout);
-  }, [entries, availablePairs, motivationalImages, appTitle, accountBalance, currentTheme, isFirstTime, user]);
+  }, [entries, availablePairs, motivationalImages, appTitle, accountBalance, currentTheme, isFirstTime, user, challengeSettings, challengeState]);
 
   // CSV Parser Helper
   const parseCSVLine = (line) => {
@@ -3084,6 +3258,8 @@ export default function TradingJournalApp() {
           if (data.appTitle) setAppTitle(data.appTitle);
           if (data.accountBalance !== undefined) setAccountBalance(data.accountBalance);
           if (data.currentTheme) setCurrentTheme(data.currentTheme);
+          if (data.challengeSettings) setChallengeSettings({ ...defaultChallengeSettings, ...data.challengeSettings });
+          if (data.challengeState) setChallengeState({ ...defaultChallengeState, ...data.challengeState });
           if (data.initialized) setIsFirstTime(false);
         }
         alert('Datos importados exitosamente');
@@ -3355,6 +3531,7 @@ export default function TradingJournalApp() {
                 setSettingsBalance(accountBalance);
                 setSettingsTheme(currentTheme);
                 setSettingsTitle(appTitle);
+                setSettingsChallenge({ ...challengeSettings });
                 setShowSettings(true);
                 if (showSettings === false) {
                   const currentThemeType = THEMES[currentTheme]?.type || 'dark';
@@ -3413,6 +3590,7 @@ export default function TradingJournalApp() {
               setSettingsBalance(accountBalance);
               setSettingsTheme(currentTheme);
               setSettingsTitle(appTitle);
+              setSettingsChallenge({ ...challengeSettings });
               setShowSettings(!showSettings);
               if (showSettings === false) {
                 const currentThemeType = THEMES[currentTheme]?.type || 'dark';
@@ -3437,6 +3615,26 @@ export default function TradingJournalApp() {
         </div>
       </header>
 
+      {/* Challenge mode progress — only when enabled */}
+      {challengeSettings.enabled && (
+        <div className={clsx('shrink-0 px-3 lg:px-6 py-2 border-b', theme.borderSec, theme.bgCard50)}>
+          <ChallengeProgress
+            profitPercent={challengeMetrics.profitPercent}
+            phase1Target={challengeSettings.phase1TargetPercent}
+            phase2Target={challengeSettings.phase2TargetPercent}
+            dailyLossPercent={challengeMetrics.dailyLossPercent}
+            totalLossPercent={challengeMetrics.totalLossPercent}
+            dailyLossLimit={challengeSettings.dailyLossLimitPercent}
+            totalLossLimit={challengeSettings.totalLossLimitPercent}
+            phase1Passed={!!challengeState.phase1PassedAt}
+            phase2Passed={!!challengeState.phase2PassedAt}
+            dailyLimitExceeded={challengeSettings.dailyLossLimitPercent > 0 && challengeMetrics.dailyLossPercent >= challengeSettings.dailyLossLimitPercent}
+            totalLimitExceeded={challengeSettings.totalLossLimitPercent > 0 && challengeMetrics.totalLossPercent >= challengeSettings.totalLossLimitPercent}
+            theme={theme}
+          />
+        </div>
+      )}
+
       {/* Settings Modal */}
       {showSettings && (
         <div className={`fixed lg:absolute top-0 lg:top-20 right-0 lg:right-6 w-full lg:w-96 h-full lg:h-auto ${theme.bgSec} border ${theme.border} rounded-none lg:rounded-xl shadow-2xl z-30 animate-in slide-in-from-top-5 p-4 lg:p-6 overflow-y-auto lg:max-h-[80vh]`}>
@@ -3447,10 +3645,12 @@ export default function TradingJournalApp() {
             <button 
               onClick={() => {
                 // Check for unsaved changes
+                const challengeChanged = JSON.stringify(settingsChallenge) !== JSON.stringify(challengeSettings);
                 const hasChanges =
                   settingsBalance !== accountBalance ||
                   settingsTheme !== currentTheme ||
-                  (settingsTitle || '').trim() !== (appTitle || '').trim();
+                  (settingsTitle || '').trim() !== (appTitle || '').trim() ||
+                  challengeChanged;
                 if (hasChanges) {
                   setShowSettingsCloseConfirm(true);
                 } else {
@@ -3463,53 +3663,29 @@ export default function TradingJournalApp() {
               <X size={18} />
             </button>
           </div>
-          <div className="space-y-6">
-            <div>
-              <Input
-                label="Título del Journal"
-                value={settingsTitle}
-                onChange={(e) => setSettingsTitle(e.target.value)}
-                placeholder="Ej: WJT 2026"
-                theme={theme}
-              />
-              <p className={`text-xs ${theme.textMuted} mt-2`}>
-                Se mostrará en la barra superior.
-              </p>
+          <div className="space-y-1">
+            {/* Section: General */}
+            <div className={clsx('rounded-lg border', theme.border, theme.bgCard50)}>
+              <button type="button" onClick={() => toggleSettingsSection('general')} className={clsx('w-full flex items-center justify-between gap-2 px-4 py-3 text-left', theme.textMain, theme.bgHover, 'rounded-t-lg')}>
+                <span className={clsx('text-xs uppercase tracking-wider font-semibold flex items-center gap-2', theme.textSec)}><Settings size={14} /> General</span>
+                {settingsSectionsExpanded.general ? <ChevronUp size={16} className={theme.textMuted} /> : <ChevronDown size={16} className={theme.textMuted} />}
+              </button>
+              {settingsSectionsExpanded.general && (
+                <div className={clsx('px-4 pb-4 pt-1 border-t', theme.borderSec)}>
+                  <Input label="Título del Journal" value={settingsTitle} onChange={(e) => setSettingsTitle(e.target.value)} placeholder="Ej: WJT 2026" theme={theme} />
+                  <p className={clsx('text-xs mt-2', theme.textMuted)}>Se mostrará en la barra superior.</p>
+                  <Input label="Balance Inicial ($)" type="number" value={settingsBalance === '' ? '' : settingsBalance} onChange={(e) => { const val = e.target.value; if (val === '' || val === '-') setSettingsBalance(''); else { const numVal = parseFloat(val); if (!isNaN(numVal)) setSettingsBalance(numVal); else setSettingsBalance(val); } }} onBlur={(e) => { const val = parseFloat(e.target.value); if (isNaN(val) || val === '') setSettingsBalance(0); else setSettingsBalance(val); }} theme={theme} />
+                </div>
+              )}
             </div>
-            <div>
-              <Input 
-                label="Balance Inicial ($)" 
-                type="number" 
-                value={settingsBalance === '' ? '' : settingsBalance} 
-                onChange={(e) => {
-                  const val = e.target.value;
-                  // Allow empty string for typing, or valid number
-                  if (val === '' || val === '-') {
-                    setSettingsBalance('');
-                  } else {
-                    const numVal = parseFloat(val);
-                    if (!isNaN(numVal)) {
-                      setSettingsBalance(numVal);
-                    } else {
-                      // Keep the string value while typing invalid characters
-                      setSettingsBalance(val);
-                    }
-                  }
-                }}
-                onBlur={(e) => {
-                  // Ensure we have a valid number on blur
-                  const val = parseFloat(e.target.value);
-                  if (isNaN(val) || val === '') {
-                    setSettingsBalance(0);
-                  } else {
-                    setSettingsBalance(val);
-                  }
-                }}
-                theme={theme} 
-              />
-            </div>
-            <div>
-              <label className={`text-xs uppercase tracking-wider ${theme.textSec} font-semibold mb-3 block flex items-center gap-2`}><Palette size={14} /> Apariencia e Interfaz</label>
+            {/* Section: Apariencia e Interfaz */}
+            <div className={clsx('rounded-lg border', theme.border, theme.bgCard50)}>
+              <button type="button" onClick={() => toggleSettingsSection('theme')} className={clsx('w-full flex items-center justify-between gap-2 px-4 py-3 text-left', theme.textMain, theme.bgHover, 'rounded-t-lg')}>
+                <span className={clsx('text-xs uppercase tracking-wider font-semibold flex items-center gap-2', theme.textSec)}><Palette size={14} /> Apariencia e Interfaz</span>
+                {settingsSectionsExpanded.theme ? <ChevronUp size={16} className={theme.textMuted} /> : <ChevronDown size={16} className={theme.textMuted} />}
+              </button>
+              {settingsSectionsExpanded.theme && (
+                <div className={clsx('px-4 pb-4 pt-1 border-t', theme.borderSec)}>
               {/* Theme Type Toggle */}
               <div className={`flex items-center gap-2 mb-4 p-1 ${theme.bgCard} rounded-lg border ${theme.border}`}>
                 <button
@@ -3572,9 +3748,65 @@ export default function TradingJournalApp() {
                     </button>
                   ))}
               </div>
+                </div>
+              )}
             </div>
-            <div>
-              <label className={`text-xs uppercase tracking-wider ${theme.textSec} font-semibold mb-3 block flex items-center gap-2`}><List size={14} /> Gestión de Pares</label>
+            {/* Section: Challenge mode */}
+            <div className={clsx('rounded-lg border', theme.border, theme.bgCard50)}>
+              <button type="button" onClick={() => toggleSettingsSection('challenge')} className={clsx('w-full flex items-center justify-between gap-2 px-4 py-3 text-left', theme.textMain, theme.bgHover, 'rounded-t-lg')}>
+                <span className={clsx('text-xs uppercase tracking-wider font-semibold flex items-center gap-2', theme.textSec)}><Trophy size={14} /> Challenge mode</span>
+                {settingsSectionsExpanded.challenge ? <ChevronUp size={16} className={theme.textMuted} /> : <ChevronDown size={16} className={theme.textMuted} />}
+              </button>
+              {settingsSectionsExpanded.challenge && (
+                <div className={clsx('px-4 pb-4 pt-1 border-t', theme.borderSec)}>
+              <p className={clsx('text-sm mb-3', theme.textSec)}>Simular reglas de prop firm (objetivos y límites de pérdida)</p>
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={settingsChallenge.enabled}
+                  onClick={() => setSettingsChallenge((c) => ({ ...c, enabled: !c.enabled }))}
+                  className={clsx(
+                    'relative inline-flex h-6 w-11 shrink-0 rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-transparent',
+                    settingsChallenge.enabled ? `${theme.accentBg} ${theme.border}` : `${theme.bgCard} ${theme.border}`,
+                    theme.accentRing
+                  )}
+                >
+                  <span className={clsx('pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform', settingsChallenge.enabled ? 'translate-x-5' : 'translate-x-0.5')} style={{ marginTop: 2 }} />
+                </button>
+              </div>
+              {settingsChallenge.enabled && (
+                <div className={`space-y-4 p-4 rounded-lg border ${theme.border} ${theme.bgCard}`}>
+                  <Input label="Phase 1 target (%)" type="number" value={settingsChallenge.phase1TargetPercent} onChange={(e) => setSettingsChallenge((c) => ({ ...c, phase1TargetPercent: parseFloat(e.target.value) || 0 }))} theme={theme} />
+                  <Input label="Phase 2 target (%)" type="number" value={settingsChallenge.phase2TargetPercent} onChange={(e) => setSettingsChallenge((c) => ({ ...c, phase2TargetPercent: parseFloat(e.target.value) || 0 }))} theme={theme} />
+                  <Input label="Daily loss limit (%)" type="number" value={settingsChallenge.dailyLossLimitPercent} onChange={(e) => setSettingsChallenge((c) => ({ ...c, dailyLossLimitPercent: parseFloat(e.target.value) || 0 }))} theme={theme} />
+                  <Input label="Total loss limit (%)" type="number" value={settingsChallenge.totalLossLimitPercent} onChange={(e) => setSettingsChallenge((c) => ({ ...c, totalLossLimitPercent: parseFloat(e.target.value) || 0 }))} theme={theme} />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="challenge-use-current-balance"
+                      checked={settingsChallenge.startingBalance == null}
+                      onChange={(e) => setSettingsChallenge((c) => ({ ...c, startingBalance: e.target.checked ? null : (accountBalance || 0) }))}
+                      className={clsx('rounded border', theme.border, theme.accentRing, 'focus:ring-2')}
+                    />
+                    <label htmlFor="challenge-use-current-balance" className={`text-sm ${theme.textMain}`}>Use current balance when starting</label>
+                  </div>
+                  {settingsChallenge.startingBalance != null && (
+                    <Input label="Starting balance ($)" type="number" value={settingsChallenge.startingBalance} onChange={(e) => setSettingsChallenge((c) => ({ ...c, startingBalance: parseFloat(e.target.value) || null }))} theme={theme} />
+                  )}
+                </div>
+              )}
+                </div>
+              )}
+            </div>
+            {/* Section: Gestión de Pares */}
+            <div className={clsx('rounded-lg border', theme.border, theme.bgCard50)}>
+              <button type="button" onClick={() => toggleSettingsSection('pairs')} className={clsx('w-full flex items-center justify-between gap-2 px-4 py-3 text-left', theme.textMain, theme.bgHover, 'rounded-t-lg')}>
+                <span className={clsx('text-xs uppercase tracking-wider font-semibold flex items-center gap-2', theme.textSec)}><List size={14} /> Gestión de Pares</span>
+                {settingsSectionsExpanded.pairs ? <ChevronUp size={16} className={theme.textMuted} /> : <ChevronDown size={16} className={theme.textMuted} />}
+              </button>
+              {settingsSectionsExpanded.pairs && (
+                <div className={clsx('px-4 pb-4 pt-1 border-t', theme.borderSec)}>
               <div className="flex gap-2 mb-3">
                 <Input 
                   value={newPairInput} 
@@ -3594,10 +3826,18 @@ export default function TradingJournalApp() {
                   <List size={18} />
                 </Button>
               </div>
-              <div className="flex flex-wrap gap-2">{availablePairs.map(pair => (<div key={pair} className={`text-xs px-2 py-1 rounded border ${theme.border} ${theme.bgCard} ${theme.textMain} flex items-center gap-1`}>{pair}<button onClick={() => handleRemovePair(pair)} className="hover:text-rose-500 ml-1 opacity-50 hover:opacity-100"><X size={12}/></button></div>))}</div>
+              <div className={clsx('flex flex-wrap gap-2', theme.textMain)}>{availablePairs.map(pair => (<div key={pair} className={clsx('text-xs px-2 py-1 rounded border flex items-center gap-1', theme.border, theme.bgCard, theme.textMain)}>{pair}<button onClick={() => handleRemovePair(pair)} className="hover:text-rose-500 ml-1 opacity-50 hover:opacity-100"><X size={12}/></button></div>))}</div>
+                </div>
+              )}
             </div>
-            <div className={`pt-4 border-t ${theme.borderSec}`}>
-              <label className={`text-xs uppercase tracking-wider ${theme.textSec} font-semibold mb-3 block flex items-center gap-2`}><Download size={14} /> Importar / Exportar</label>
+            {/* Section: Importar / Exportar */}
+            <div className={clsx('rounded-lg border', theme.border, theme.bgCard50)}>
+              <button type="button" onClick={() => toggleSettingsSection('importExport')} className={clsx('w-full flex items-center justify-between gap-2 px-4 py-3 text-left', theme.textMain, theme.bgHover, 'rounded-t-lg')}>
+                <span className={clsx('text-xs uppercase tracking-wider font-semibold flex items-center gap-2', theme.textSec)}><Download size={14} /> Importar / Exportar</span>
+                {settingsSectionsExpanded.importExport ? <ChevronUp size={16} className={theme.textMuted} /> : <ChevronDown size={16} className={theme.textMuted} />}
+              </button>
+              {settingsSectionsExpanded.importExport && (
+                <div className={clsx('px-4 pb-4 pt-1 border-t', theme.borderSec)}>
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline" onClick={handleImportData} theme={theme} className="flex items-center justify-center gap-2">
                   <Upload size={16} /> Importar CSV
@@ -3612,12 +3852,17 @@ export default function TradingJournalApp() {
                   <Download size={16} /> Exportar JSON
                 </Button>
               </div>
+                </div>
+              )}
             </div>
             {isSupabaseConfigured() && user && (
-              <div className={`pt-4 border-t ${theme.borderSec}`}>
-                <label className={`text-xs uppercase tracking-wider ${theme.textSec} font-semibold mb-3 block flex items-center gap-2`}>
-                  <Settings size={14} /> Cuenta
-                </label>
+            <div className={clsx('rounded-lg border', theme.border, theme.bgCard50)}>
+              <button type="button" onClick={() => toggleSettingsSection('account')} className={clsx('w-full flex items-center justify-between gap-2 px-4 py-3 text-left', theme.textMain, theme.bgHover, 'rounded-t-lg')}>
+                <span className={clsx('text-xs uppercase tracking-wider font-semibold flex items-center gap-2', theme.textSec)}><Settings size={14} /> Cuenta</span>
+                {settingsSectionsExpanded.account ? <ChevronUp size={16} className={theme.textMuted} /> : <ChevronDown size={16} className={theme.textMuted} />}
+              </button>
+              {settingsSectionsExpanded.account && (
+                <div className={clsx('px-4 pb-4 pt-1 border-t', theme.borderSec)}>
                 <div className="mb-3">
                   <p className={`text-sm ${theme.textMain} mb-2`}>
                     Conectado como: <span className={`font-semibold ${theme.accentText}`}>{user.email}</span>
@@ -3641,29 +3886,40 @@ export default function TradingJournalApp() {
                     <LogOut size={18} /> Cerrar Sesión
                   </Button>
                 </div>
+                </div>
+              )}
               </div>
             )}
-            <div className={`pt-4 border-t ${theme.borderSec}`}>
-              <label className={`text-xs uppercase tracking-wider ${theme.textSec} font-semibold mb-3 block flex items-center gap-2`}><AlertTriangle size={14} className="text-rose-500" /> Zona de Peligro</label>
+            {/* Section: Zona de Peligro */}
+            <div className={clsx('rounded-lg border border-rose-500/50', theme.bgCard50)}>
+              <button type="button" onClick={() => toggleSettingsSection('danger')} className={clsx('w-full flex items-center justify-between gap-2 px-4 py-3 text-left', theme.textMain, theme.bgHover, 'rounded-t-lg')}>
+                <span className="text-xs uppercase tracking-wider font-semibold flex items-center gap-2 text-rose-400"><AlertTriangle size={14} /> Zona de Peligro</span>
+                {settingsSectionsExpanded.danger ? <ChevronUp size={16} className={theme.textMuted} /> : <ChevronDown size={16} className={theme.textMuted} />}
+              </button>
+              {settingsSectionsExpanded.danger && (
+                <div className={clsx('px-4 pb-4 pt-1 border-t', theme.borderSec)}>
               <Button variant="danger" onClick={handleResetData} theme={theme} className="w-full flex items-center justify-center gap-2">
                 <Trash2 size={18} /> Resetear Todos los Datos
               </Button>
-              <p className={`text-xs ${theme.textMuted} mt-2 text-center`}>Eliminará todas las operaciones, pares e imágenes</p>
+              <p className={clsx('text-xs mt-2 text-center', theme.textMuted)}>Eliminará todas las operaciones, pares e imágenes</p>
+                </div>
+              )}
             </div>
             <Button 
               variant="primary" 
               onClick={async () => {
                 // Save changes
                 const newBalance = typeof settingsBalance === 'number' ? settingsBalance : parseFloat(settingsBalance) || 0;
-                  const newTitle = (settingsTitle || '').trim() || 'ProTrader Journal';
+                const newTitle = (settingsTitle || '').trim() || 'ProTrader Journal';
                 setAccountBalance(newBalance);
                 setCurrentTheme(settingsTheme);
-                  setAppTitle(newTitle);
+                setAppTitle(newTitle);
+                setChallengeSettings(settingsChallenge);
                 setShowSettings(false);
-                  await saveAllJournalData({ accountBalance: newBalance, currentTheme: settingsTheme, appTitle: newTitle });
+                await saveAllJournalData({ accountBalance: newBalance, currentTheme: settingsTheme, appTitle: newTitle, challengeSettings: settingsChallenge });
               }} 
               theme={theme} 
-              className="w-full"
+              className="w-full mt-4"
             >
               Guardar Cambios
             </Button>
@@ -3897,6 +4153,9 @@ export default function TradingJournalApp() {
                 {settingsTheme !== currentTheme && (
                   <li>Tema: {THEMES[currentTheme]?.name} → {THEMES[settingsTheme]?.name}</li>
                 )}
+                {JSON.stringify(settingsChallenge) !== JSON.stringify(challengeSettings) && (
+                  <li>Challenge mode: configuración modificada</li>
+                )}
               </ul>
             </div>
             <div className="flex gap-3">
@@ -3907,6 +4166,7 @@ export default function TradingJournalApp() {
                   setSettingsTitle(appTitle);
                   setSettingsBalance(accountBalance);
                   setSettingsTheme(currentTheme);
+                  setSettingsChallenge({ ...challengeSettings });
                   setShowSettingsCloseConfirm(false);
                   setShowSettings(false);
                 }} 
@@ -3923,9 +4183,10 @@ export default function TradingJournalApp() {
                   setAccountBalance(newBalance);
                   setCurrentTheme(settingsTheme);
                   setAppTitle(newTitle);
+                  setChallengeSettings(settingsChallenge);
                   setShowSettingsCloseConfirm(false);
                   setShowSettings(false);
-                  await saveAllJournalData({ accountBalance: newBalance, currentTheme: settingsTheme, appTitle: newTitle });
+                  await saveAllJournalData({ accountBalance: newBalance, currentTheme: settingsTheme, appTitle: newTitle, challengeSettings: settingsChallenge });
                 }} 
                 theme={theme} 
                 className="flex-1"
@@ -3945,6 +4206,125 @@ export default function TradingJournalApp() {
             theme={THEMES[currentTheme]}
             onClose={() => setShowProfileSettings(false)}
           />
+        </div>
+      )}
+
+      {/* Challenge: Phase 2 passed — congrats modal */}
+      {showPhase2CongratsModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className={clsx('w-full max-w-md p-6 rounded-xl shadow-2xl border animate-in zoom-in-95 duration-200', theme.bgCard, theme.border)}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 rounded-full bg-emerald-500/20 border border-emerald-500/50">
+                <Trophy className="text-emerald-400" size={28} />
+              </div>
+              <h3 className={clsx('text-xl font-bold', theme.textMain)}>Congratulations!</h3>
+            </div>
+            <p className={clsx('text-sm', theme.textSec, 'mb-6')}>
+              You're a funded trader! You've passed the challenge.
+            </p>
+            <Button variant="primary" onClick={() => setShowPhase2CongratsModal(false)} theme={theme} className="w-full">
+              OK
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Challenge: Phase 1 passed — modal (more noticeable) */}
+      {showPhase1PassedToast && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300 p-4">
+          <div className={clsx('w-full max-w-md p-6 rounded-xl shadow-2xl border-2 border-amber-500/50 animate-in zoom-in-95 duration-200', theme.bgCard, theme.border)}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 rounded-full bg-amber-500/20 border-2 border-amber-500/50">
+                <Trophy className="text-amber-400" size={28} />
+              </div>
+              <h3 className={clsx('text-xl font-bold', theme.textMain)}>Phase 1 passed</h3>
+            </div>
+            <p className={clsx('text-base', theme.textSec, 'mb-6')}>
+              You've reached your first profit target.
+            </p>
+            <Button variant="primary" onClick={() => setShowPhase1PassedToast(false)} theme={theme} className="w-full">
+              OK
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Challenge: Near loss warning — modal (more noticeable) */}
+      {showNearLossToast && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300 p-4">
+          <div className={clsx('w-full max-w-md p-6 rounded-xl shadow-2xl border-2 border-amber-500/60 animate-in zoom-in-95 duration-200', theme.bgCard, theme.border)}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 rounded-full bg-amber-500/20 border-2 border-amber-500/50">
+                <AlertTriangle className="text-amber-400" size={28} />
+              </div>
+              <h3 className={clsx('text-xl font-bold', theme.textMain)}>Warning</h3>
+            </div>
+            <p className={clsx('text-base', theme.textSec, 'mb-6')}>
+              You're close to the loss limit. Further losses may fail the challenge.
+            </p>
+            <Button variant="primary" onClick={() => setShowNearLossToast(false)} theme={theme} className="w-full">
+              OK
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Challenge: Failed — daily or total loss limit exceeded */}
+      {showChallengeFailedModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 backdrop-blur-sm animate-in fade-in duration-300 p-4">
+          <div className={clsx('w-full max-w-md p-6 rounded-xl shadow-2xl border-2 border-rose-500 animate-in zoom-in-95 duration-200', theme.bgCard, theme.border)}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 rounded-full bg-rose-500/20 border-2 border-rose-500/50">
+                <AlertTriangle className="text-rose-400" size={28} />
+              </div>
+              <h3 className={clsx('text-xl font-bold', theme.textMain)}>Challenge failed</h3>
+            </div>
+            <p className={clsx('text-base', theme.textSec, 'mb-4')}>
+              You've exceeded the allowed loss limit (daily or total drawdown).
+            </p>
+            <p className={clsx('text-sm', theme.textMuted, 'mb-6')}>
+              Export your entries to keep a copy, then restart from your current balance or exit challenge mode.
+            </p>
+            <div className="flex flex-col gap-3">
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  const success = await downloadJournalData();
+                  if (success) setShowChallengeFailedModal(false);
+                }}
+                theme={theme}
+                className="w-full flex items-center justify-center gap-2"
+              >
+                <Download size={16} /> Export entries (backup)
+              </Button>
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  const currentRef = typeof metrics.currentBalance === 'number' ? metrics.currentBalance : accountBalance;
+                  const resetState = { ...defaultChallengeState, referenceBalance: currentRef };
+                  setChallengeState(resetState);
+                  setShowChallengeFailedModal(false);
+                  await saveAllJournalData({ challengeState: resetState });
+                }}
+                theme={theme}
+                className="flex-1"
+              >
+                Restart from current balance
+              </Button>
+              <Button
+                variant="primary"
+                onClick={async () => {
+                  setChallengeSettings((c) => ({ ...c, enabled: false }));
+                  setShowChallengeFailedModal(false);
+                  await saveAllJournalData({ challengeSettings: { ...challengeSettings, enabled: false } });
+                }}
+                theme={theme}
+                className="flex-1"
+              >
+                Exit challenge mode
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 

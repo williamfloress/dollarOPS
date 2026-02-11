@@ -514,6 +514,24 @@ export const loadJournalDataFromSupabase = async (userId) => {
       accountBalance: parseFloat(preferences?.account_balance || 0),
       currentTheme: preferences?.current_theme || 'slate_blue',
       initialized: preferences?.initialized || false,
+      // Challenge mode settings and state (columns may be missing before migration)
+      challengeSettings: {
+        enabled: preferences?.challenge_mode_enabled ?? false,
+        phase1TargetPercent: parseFloat(preferences?.challenge_phase1_target_percent ?? 8),
+        phase2TargetPercent: parseFloat(preferences?.challenge_phase2_target_percent ?? 12),
+        dailyLossLimitPercent: parseFloat(preferences?.challenge_daily_loss_limit_percent ?? 5),
+        totalLossLimitPercent: parseFloat(preferences?.challenge_total_loss_limit_percent ?? 5),
+        startingBalance: preferences?.challenge_starting_balance != null ? parseFloat(preferences.challenge_starting_balance) : null,
+        challengeStartDate: preferences?.challenge_start_date || null,
+      },
+      challengeState: {
+        phase1PassedAt: preferences?.challenge_phase1_passed_at || null,
+        phase2PassedAt: preferences?.challenge_phase2_passed_at || null,
+        highWaterMark: preferences?.challenge_high_water_mark != null ? parseFloat(preferences.challenge_high_water_mark) : null,
+        dayStartBalance: preferences?.challenge_day_start_balance != null ? parseFloat(preferences.challenge_day_start_balance) : null,
+        dayStartDate: preferences?.challenge_day_start_date || null,
+        referenceBalance: preferences?.challenge_reference_balance != null ? parseFloat(preferences.challenge_reference_balance) : null,
+      },
     };
 
     return { data, error: null };
@@ -649,20 +667,44 @@ export const saveJournalDataToSupabase = async (userId, journalData) => {
       }
     }
 
-    // Save user preferences
-    if (journalData.appTitle !== undefined || 
-        journalData.accountBalance !== undefined || 
-        journalData.currentTheme !== undefined || 
-        journalData.initialized !== undefined) {
+    // Save user preferences (including challenge mode settings and state)
+    const hasPrefs = journalData.appTitle !== undefined ||
+        journalData.accountBalance !== undefined ||
+        journalData.currentTheme !== undefined ||
+        journalData.initialized !== undefined;
+    const cs = journalData.challengeSettings;
+    const cst = journalData.challengeState;
+    const hasChallenge = (cs && typeof cs === 'object') || (cst && typeof cst === 'object');
+
+    if (hasPrefs || hasChallenge) {
+      const prefsPayload = {
+        id: userId,
+        ...(journalData.appTitle !== undefined && { app_title: journalData.appTitle }),
+        ...(journalData.accountBalance !== undefined && { account_balance: journalData.accountBalance }),
+        ...(journalData.currentTheme !== undefined && { current_theme: journalData.currentTheme }),
+        ...(journalData.initialized !== undefined && { initialized: journalData.initialized }),
+      };
+      if (cs && typeof cs === 'object') {
+        if (cs.enabled !== undefined) prefsPayload.challenge_mode_enabled = cs.enabled;
+        if (cs.phase1TargetPercent !== undefined) prefsPayload.challenge_phase1_target_percent = cs.phase1TargetPercent;
+        if (cs.phase2TargetPercent !== undefined) prefsPayload.challenge_phase2_target_percent = cs.phase2TargetPercent;
+        if (cs.dailyLossLimitPercent !== undefined) prefsPayload.challenge_daily_loss_limit_percent = cs.dailyLossLimitPercent;
+        if (cs.totalLossLimitPercent !== undefined) prefsPayload.challenge_total_loss_limit_percent = cs.totalLossLimitPercent;
+        if (cs.startingBalance !== undefined) prefsPayload.challenge_starting_balance = cs.startingBalance;
+        if (cs.challengeStartDate !== undefined) prefsPayload.challenge_start_date = cs.challengeStartDate || null;
+      }
+      if (cst && typeof cst === 'object') {
+        if (cst.phase1PassedAt !== undefined) prefsPayload.challenge_phase1_passed_at = cst.phase1PassedAt || null;
+        if (cst.phase2PassedAt !== undefined) prefsPayload.challenge_phase2_passed_at = cst.phase2PassedAt || null;
+        if (cst.highWaterMark !== undefined) prefsPayload.challenge_high_water_mark = cst.highWaterMark != null ? cst.highWaterMark : null;
+        if (cst.dayStartBalance !== undefined) prefsPayload.challenge_day_start_balance = cst.dayStartBalance != null ? cst.dayStartBalance : null;
+        if (cst.dayStartDate !== undefined) prefsPayload.challenge_day_start_date = cst.dayStartDate || null;
+        if (cst.referenceBalance !== undefined) prefsPayload.challenge_reference_balance = cst.referenceBalance != null ? cst.referenceBalance : null;
+      }
+
       const { error: prefsError } = await supabaseClient
         .from('user_preferences')
-        .upsert({
-          id: userId,
-          app_title: journalData.appTitle,
-          account_balance: journalData.accountBalance,
-          current_theme: journalData.currentTheme,
-          initialized: journalData.initialized,
-        }, {
+        .upsert(prefsPayload, {
           onConflict: 'id'
         });
 
