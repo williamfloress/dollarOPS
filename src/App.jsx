@@ -4831,7 +4831,7 @@ export default function TradingJournalApp() {
                 <h3 className={clsx("text-xl sm:text-2xl font-bold", theme.textMain, "flex items-center gap-2")}><Calendar className={theme.accentText} size={24} />{selectedDate.getDate()} de {selectedDate.toLocaleDateString('es-ES', { month: 'long' })}</h3>
                 <div className="flex justify-between items-end mt-4"><div><div className={`text-xs ${theme.textMuted} uppercase font-bold tracking-wider`}>Resultado</div><div className={`text-2xl sm:text-3xl font-mono font-bold ${metrics.daily.val >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{metrics.daily.val >= 0 ? '+' : ''}{metrics.daily.val.toFixed(2)}$</div></div><div className="text-right"><div className={`text-xs ${theme.textMuted} uppercase font-bold`}>Trades</div><div className={clsx("text-lg sm:text-xl font-bold", theme.textMain)}>{metrics.daily.count}</div></div></div>
               </div>
-              <div className={`flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 ${theme.bgSec}`}>
+              <div className={`flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 space-y-2 ${theme.bgSec}`}>
                 {(() => {
                   const dayEntries = entries.filter(e => isSameDay(new Date(e.date), selectedDate));
                   const dayTrades = dayEntries.filter(e => e.entryType !== 'thought' && e.entryType !== 'dayoff');
@@ -4861,7 +4861,7 @@ export default function TradingJournalApp() {
                         <>
                           <div className={`text-xs ${theme.textMuted} uppercase font-bold tracking-wider mb-2 px-1`}>Operaciones</div>
                           {dayTrades.map(entry => (
-                            <div key={entry.id} onClick={() => { handleViewEntry(entry); setShowSidebar(false); }} className={`${theme.bgCard} p-3 sm:p-4 rounded-lg sm:rounded-xl border ${theme.border} flex flex-col gap-2 sm:gap-3 group hover:${theme.borderSec} transition-all cursor-pointer`}>
+                            <div key={entry.id} onClick={() => { handleViewEntry(entry); setShowSidebar(false); }} className={`${theme.bgCard} p-2.5 sm:p-3 rounded-lg sm:rounded-xl border ${theme.border} flex flex-col gap-1.5 sm:gap-2 group hover:${theme.borderSec} transition-all cursor-pointer`}>
                               <div className="flex justify-between items-start gap-2">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 mb-1 flex-wrap"><span className={`text-[10px] font-bold px-2 py-1 rounded uppercase shrink-0 ${entry.type === 'BUY' ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'}`}>{entry.type}</span><span className={`font-bold ${theme.textMain} text-base sm:text-lg truncate`}>{entry.pair}</span>{entry.screenshotUrl && (<a href={entry.screenshotUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className={`ml-1 p-1 rounded hover:${theme.bgSec} ${theme.textMuted} hover:${theme.accentText} transition-colors shrink-0`} title="Ver Captura"><ExternalLink size={12} /></a>)}</div>
@@ -4869,7 +4869,7 @@ export default function TradingJournalApp() {
                                 </div>
                                 <div className="text-right shrink-0"><div className={`font-mono text-base sm:text-lg font-bold ${entry.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{entry.pnl >= 0 ? '+' : ''}{parseFloat(entry.pnl).toFixed(2)}$</div><button onClick={(e) => { e.stopPropagation(); handleDeleteEntry(entry.id); }} className={`${theme.textSec} hover:text-rose-500 transition-colors mt-1 sm:mt-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100`}><Trash2 size={14} /></button></div>
                               </div>
-                              {entry.notes && (<div className={`text-xs ${theme.textMuted} italic border-t ${theme.borderSec} pt-2 mt-1 flex gap-2 items-start`}><MessageSquare size={12} className="mt-0.5 opacity-50 shrink-0" /><span className="line-clamp-2 sm:hover:line-clamp-none transition-all">{entry.notes}</span></div>)}
+                              {entry.notes && (<div className={`text-xs ${theme.textMuted} italic border-t ${theme.borderSec} pt-1.5 mt-1 flex gap-1.5 items-start`}><MessageSquare size={11} className="mt-0.5 opacity-50 shrink-0" /><span className="line-clamp-2 sm:hover:line-clamp-none transition-all">{entry.notes}</span></div>)}
                             </div>
                           ))}
                         </>
@@ -4880,7 +4880,7 @@ export default function TradingJournalApp() {
                         <>
                           <div className={`text-xs ${theme.textMuted} uppercase font-bold tracking-wider mb-2 px-1 mt-4`}>Pensamientos</div>
                           {dayThoughts.map(thought => (
-                            <div key={thought.id} className={`${theme.bgCard} p-3 sm:p-4 rounded-lg sm:rounded-xl border ${theme.border} flex flex-col gap-2 sm:gap-3 group hover:${theme.borderSec} transition-all`}>
+                            <div key={thought.id} className={`${theme.bgCard} p-2.5 sm:p-3 rounded-lg sm:rounded-xl border ${theme.border} flex flex-col gap-1.5 sm:gap-2 group hover:${theme.borderSec} transition-all`}>
                               <div className="flex justify-between items-start gap-2">
                                 <div className="flex-1 min-w-0 flex items-start gap-2">
                                   <Brain size={16} className={`${theme.accentText} mt-0.5 shrink-0`} />
@@ -4908,18 +4908,20 @@ export default function TradingJournalApp() {
                   );
                 })()}
               </div>
-              <div className={`p-3 sm:p-5 ${theme.bgCard} border-t ${theme.border} space-y-2`}>
-                <Button onClick={() => { setIsAddEntryModalOpen(true); setShowSidebar(false); }} className="w-full py-2 sm:py-3 text-sm sm:text-base" theme={theme}><Plus size={18} /> Añadir Nueva Entrada</Button>
-                <Button onClick={() => { setIsAddThoughtModalOpen(true); setShowSidebar(false); }} variant="ghost" className="w-full py-2 sm:py-3 text-sm sm:text-base" theme={theme}><Brain size={18} /> Añadir Pensamiento</Button>
-                <Button onClick={handleToggleDayOff} variant="ghost" className={`w-full py-2 sm:py-3 text-sm sm:text-base ${(() => {
-                  const dayEntries = entries.filter(e => isSameDay(new Date(e.date), selectedDate));
-                  const isDayOff = dayEntries.some(e => e.entryType === 'dayoff');
-                  return isDayOff ? 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30' : '';
-                })()}`} theme={theme}><CalendarX size={18} /> {(() => {
-                  const dayEntries = entries.filter(e => isSameDay(new Date(e.date), selectedDate));
-                  const isDayOff = dayEntries.some(e => e.entryType === 'dayoff');
-                  return isDayOff ? 'Quitar Day Off' : 'Marcar como Day Off';
-                })()}</Button>
+              <div className={`shrink-0 p-2 sm:p-3 ${theme.bgCard} border-t ${theme.border} space-y-1.5`}>
+                <Button onClick={() => { setIsAddEntryModalOpen(true); setShowSidebar(false); }} className="w-full py-2 text-sm" theme={theme}><Plus size={16} /> Añadir Nueva Entrada</Button>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <Button onClick={() => { setIsAddThoughtModalOpen(true); setShowSidebar(false); }} variant="ghost" size="sm" className="py-1.5 text-xs" theme={theme}><Brain size={14} /> Pensamiento</Button>
+                  <Button onClick={handleToggleDayOff} variant="ghost" size="sm" className={`py-1.5 text-xs ${(() => {
+                    const dayEntries = entries.filter(e => isSameDay(new Date(e.date), selectedDate));
+                    const isDayOff = dayEntries.some(e => e.entryType === 'dayoff');
+                    return isDayOff ? 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30' : '';
+                  })()}`} theme={theme}><CalendarX size={14} /> {(() => {
+                    const dayEntries = entries.filter(e => isSameDay(new Date(e.date), selectedDate));
+                    const isDayOff = dayEntries.some(e => e.entryType === 'dayoff');
+                    return isDayOff ? 'Quitar Day Off' : 'Day Off';
+                  })()}</Button>
+                </div>
               </div>
             </div>
           ) : (
