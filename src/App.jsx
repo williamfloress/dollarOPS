@@ -47,7 +47,9 @@ import {
   loadJournalData, 
   clearJournalData, 
   downloadJournalData, 
-  importJournalDataFromFile
+  importJournalDataFromFile,
+  getStoredChallengeSettings,
+  setStoredChallengeSettings,
 } from './utils/storage';
 import { 
   isSupabaseConfigured, 
@@ -2022,7 +2024,14 @@ export default function TradingJournalApp() {
     dayStartDate: null,
     referenceBalance: null,
   };
-  const [challengeSettings, setChallengeSettings] = useState(() => defaultChallengeSettings);
+  // Initialize challenge from localStorage so the progress bar is visible on first paint after refresh
+  const [challengeSettings, setChallengeSettings] = useState(() => {
+    const stored = getStoredChallengeSettings();
+    if (stored && typeof stored === 'object' && Object.keys(stored).length > 0) {
+      return { ...defaultChallengeSettings, ...stored };
+    }
+    return defaultChallengeSettings;
+  });
   const [challengeState, setChallengeState] = useState(() => defaultChallengeState);
   const [settingsChallenge, setSettingsChallenge] = useState(() => ({ ...defaultChallengeSettings }));
   const [showPhase1PassedToast, setShowPhase1PassedToast] = useState(false);
@@ -2150,7 +2159,10 @@ export default function TradingJournalApp() {
   const saveAllJournalData = async (updates = {}) => {
     setIsSaving(true);
     try {
-      // Security check: Only save when authenticated
+      const nextChallengeSettings = updates.challengeSettings !== undefined ? updates.challengeSettings : challengeSettings;
+      // Persist challenge settings to localStorage immediately so enable/disable survives refresh (even without Supabase)
+      setStoredChallengeSettings(nextChallengeSettings);
+
       if (!isSupabaseConfigured() || !user) {
         console.warn('Cannot save: User must be authenticated');
         return;
@@ -2164,7 +2176,7 @@ export default function TradingJournalApp() {
         accountBalance: updates.accountBalance !== undefined ? updates.accountBalance : accountBalance,
         currentTheme: updates.currentTheme !== undefined ? updates.currentTheme : currentTheme,
         initialized: true,
-        challengeSettings: updates.challengeSettings !== undefined ? updates.challengeSettings : challengeSettings,
+        challengeSettings: nextChallengeSettings,
         challengeState: updates.challengeState !== undefined ? updates.challengeState : challengeState,
       });
 
@@ -2412,6 +2424,11 @@ export default function TradingJournalApp() {
     }
   }, [challengeSettings.enabled, challengeSettings.startingBalance, challengeState.referenceBalance, challengeState.highWaterMark, metrics.currentBalance]);
 
+  // Sync ref on mount so restoring Challenge ON from localStorage doesn't trigger "just turned ON" logic
+  useEffect(() => {
+    prevChallengeEnabledRef.current = challengeSettings.enabled;
+  }, []);
+
   // When challenge is turned ON, start a fresh run so profit % uses current capital (fixes wrong % after reset/re-enable)
   useEffect(() => {
     const enabled = challengeSettings.enabled;
@@ -2493,8 +2510,14 @@ export default function TradingJournalApp() {
   const handleBackToDashboard = () => setSelectedDate(null);
   const handleAddEntry = async (e) => {
     e.preventDefault();
-    // Allow "0" as valid pnl value for break even trades
-    if (!formState.pair || formState.pnl === '' || formState.pnl === undefined) return;
+    const missing = [];
+    if (!formState.pair || (typeof formState.pair === 'string' && !formState.pair.trim())) missing.push('Par');
+    if (!formState.rr || (typeof formState.rr === 'string' && !formState.rr.trim())) missing.push('R:R');
+    if (formState.pnl === '' || formState.pnl === undefined) missing.push('P/L ($)');
+    if (missing.length > 0) {
+      alert(`Para guardar la entrada son obligatorios: ${missing.join(', ')}. Por favor complétalos.`);
+      return;
+    }
     const newEntry = { 
       id: Date.now(), date: selectedDate.toISOString(), pair: formState.pair.toUpperCase(), type: formState.type, 
       rr: formState.rr || '1:1', pnl: parseFloat(formState.pnl), notes: formState.notes, screenshotUrl: formState.screenshotUrl
@@ -2560,8 +2583,15 @@ export default function TradingJournalApp() {
   };
   const handleUpdateEntry = async (e) => {
     e.preventDefault();
-    // Allow "0" as valid pnl value for break even trades
-    if (!formState.pair || formState.pnl === '' || formState.pnl === undefined || !editingEntry) return;
+    if (!editingEntry) return;
+    const missing = [];
+    if (!formState.pair || (typeof formState.pair === 'string' && !formState.pair.trim())) missing.push('Par');
+    if (!formState.rr || (typeof formState.rr === 'string' && !formState.rr.trim())) missing.push('R:R');
+    if (formState.pnl === '' || formState.pnl === undefined) missing.push('P/L ($)');
+    if (missing.length > 0) {
+      alert(`Para guardar la entrada son obligatorios: ${missing.join(', ')}. Por favor complétalos.`);
+      return;
+    }
     const updatedEntry = {
       ...editingEntry,
       pair: formState.pair.toUpperCase(),
@@ -2956,9 +2986,14 @@ export default function TradingJournalApp() {
           if (data.appTitle) setAppTitle(data.appTitle);
           if (data.accountBalance !== undefined) setAccountBalance(data.accountBalance);
           if (data.currentTheme) setCurrentTheme(data.currentTheme);
-          setChallengeSettings({ ...defaultChallengeSettings, ...(data.challengeSettings || {}) });
+          const serverChallenge = { ...defaultChallengeSettings, ...(data.challengeSettings || {}) };
+          const storedChallenge = getStoredChallengeSettings();
+          const mergedChallenge = (storedChallenge?.enabled === true)
+            ? { ...serverChallenge, ...storedChallenge }
+            : serverChallenge;
+          setChallengeSettings(mergedChallenge);
           setChallengeState({ ...defaultChallengeState, ...(data.challengeState || {}) });
-          prevChallengeEnabledRef.current = !!(data.challengeSettings && data.challengeSettings.enabled);
+          prevChallengeEnabledRef.current = !!(mergedChallenge.enabled);
           
           // Use initialized field from Supabase
           if (isSupabaseConfigured() && user) {
@@ -2999,9 +3034,13 @@ export default function TradingJournalApp() {
     if (isSupabaseConfigured() && user) {
       loadData();
     } else if (!isSupabaseConfigured()) {
-      // If Supabase is not configured, show first-time setup
+      // If Supabase is not configured, show first-time setup but restore challenge mode from localStorage
       setIsLoadingData(false);
       setIsFirstTime(true);
+      const stored = getStoredChallengeSettings();
+      if (stored && typeof stored === 'object' && Object.keys(stored).length > 0) {
+        setChallengeSettings((prev) => ({ ...prev, ...stored }));
+      }
     } else {
       // If Supabase is configured but no user, don't load data
       setIsLoadingData(false);
@@ -3026,6 +3065,7 @@ export default function TradingJournalApp() {
         challengeState,
       };
       saveJournalData(allData);
+      setStoredChallengeSettings(challengeSettings);
     }, 1000); // Save 1 second after last change
 
     return () => clearTimeout(saveTimeout);

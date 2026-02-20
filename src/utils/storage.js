@@ -18,7 +18,8 @@ const STORAGE_KEYS = {
   TITLE: 'journal_title_v1',
   BALANCE: 'journal_balance_v1',
   THEME: 'journal_theme_v1',
-  INITIALIZED: 'journal_initialized_v1'
+  INITIALIZED: 'journal_initialized_v1',
+  CHALLENGE_SETTINGS: 'journal_challenge_settings_v1',
 };
 
 /**
@@ -41,6 +42,34 @@ export const getStorageMode = async () => {
   }
 };
 
+/**
+ * Get persisted challenge settings from localStorage (survives refresh even if Supabase load fails or is delayed).
+ * @returns {Object|null} Parsed challenge settings or null
+ */
+export const getStoredChallengeSettings = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.CHALLENGE_SETTINGS);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Persist challenge settings to localStorage so Challenge mode stays enabled after refresh.
+ * @param {Object} settings - challengeSettings object
+ */
+export const setStoredChallengeSettings = (settings) => {
+  try {
+    if (settings && typeof settings === 'object') {
+      localStorage.setItem(STORAGE_KEYS.CHALLENGE_SETTINGS, JSON.stringify(settings));
+    }
+  } catch (e) {
+    console.warn('Could not persist challenge settings to localStorage', e);
+  }
+};
 
 /**
  * Save all journal data to Supabase
