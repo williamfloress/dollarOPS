@@ -381,7 +381,7 @@ const Button = ({ children, onClick, variant = "primary", className = "", type="
   );
 };
 
-const Input = ({ label, value, onChange, type = "text", placeholder, autoFocus = false, onBlur, onKeyDown, theme }) => {
+const Input = ({ label, value, onChange, type = "text", placeholder, autoFocus = false, onBlur, onKeyDown, theme, error }) => {
   const ringClass = theme.accentRing === 'ring-blue-500' ? 'focus:ring-blue-500' :
                     theme.accentRing === 'ring-violet-500' ? 'focus:ring-violet-500' :
                     theme.accentRing === 'ring-emerald-500' ? 'focus:ring-emerald-500' :
@@ -391,13 +391,14 @@ const Input = ({ label, value, onChange, type = "text", placeholder, autoFocus =
       {label && <label className={clsx("text-xs uppercase tracking-wider", theme.textSec, "font-semibold")}>{label}</label>}
       <input 
         type={type} value={value} onChange={onChange} onBlur={onBlur} onKeyDown={onKeyDown} autoFocus={autoFocus} placeholder={placeholder}
-        className={clsx(theme.bgInput, "border", theme.border, theme.textMain, "px-3 py-2 rounded-lg focus:outline-none focus:ring-2", ringClass, "transition-all placeholder:opacity-40")}
+        className={clsx(theme.bgInput, theme.textMain, "border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 transition-all placeholder:opacity-40", error ? "border-red-500 focus:ring-red-500" : clsx(theme.border, ringClass))}
       />
+      {error && <p className="text-xs text-red-500 font-medium">Este campo es necesario</p>}
     </div>
   );
 };
 
-const Select = ({ label, value, onChange, options, theme }) => {
+const Select = ({ label, value, onChange, options, theme, error }) => {
   const ringClass = theme.accentRing === 'ring-blue-500' ? 'focus:ring-blue-500' :
                     theme.accentRing === 'ring-violet-500' ? 'focus:ring-violet-500' :
                     theme.accentRing === 'ring-emerald-500' ? 'focus:ring-emerald-500' :
@@ -408,7 +409,7 @@ const Select = ({ label, value, onChange, options, theme }) => {
       <div className="relative">
         <select 
           value={value} onChange={onChange}
-          className={clsx(theme.bgInput, "border", theme.border, theme.textMain, "px-3 py-2 rounded-lg focus:outline-none focus:ring-2", ringClass, "transition-all w-full appearance-none cursor-pointer")}
+          className={clsx(theme.bgInput, "border", theme.textMain, "px-3 py-2 rounded-lg focus:outline-none focus:ring-2 transition-all w-full appearance-none cursor-pointer", error ? "border-red-500 focus:ring-red-500" : clsx(theme.border, ringClass))}
         >
           <option value="" disabled>Seleccionar</option>
           {options.map(opt => <option key={opt} value={opt} className={clsx(theme.bgInput, theme.textMain)}>{opt}</option>)}
@@ -417,6 +418,7 @@ const Select = ({ label, value, onChange, options, theme }) => {
           <ChevronDown size={14} />
         </div>
       </div>
+      {error && <p className="text-xs text-red-500 font-medium">Este campo es necesario</p>}
     </div>
   );
 };
@@ -2068,6 +2070,7 @@ export default function TradingJournalApp() {
 
   const theme = THEMES[currentTheme].colors; 
   const [formState, setFormState] = useState({ pair: '', type: 'BUY', rr: '', pnl: '', notes: '', screenshotUrl: '' });
+  const [entryFormErrors, setEntryFormErrors] = useState({ pair: false, rr: false, pnl: false });
   const [thoughtFormState, setThoughtFormState] = useState({ message: '', tradingViewUrl: '' });
   const RR_OPTIONS = ['SL', 'BE', '1:1', '1:2', '1:3', '1:4', '1:5'];
 
@@ -2448,6 +2451,9 @@ export default function TradingJournalApp() {
   // Step 5: Alert logic — Phase 1 passed, Phase 2 passed, Near loss warning (throttled)
   useEffect(() => {
     if (!challengeSettings.enabled) return;
+    if (isLoadingData) return;
+    const refBalance = challengeSettings.startingBalance ?? challengeState.referenceBalance ?? metrics.currentBalance;
+    if (refBalance == null || refBalance <= 0) return;
     const now = new Date().toISOString();
     const { profitPercent, dailyLossPercent, totalLossPercent } = challengeMetrics;
     const p1Target = challengeSettings.phase1TargetPercent;
@@ -2494,6 +2500,7 @@ export default function TradingJournalApp() {
     }
   }, [
     challengeSettings.enabled,
+    challengeSettings.startingBalance,
     challengeSettings.phase1TargetPercent,
     challengeSettings.phase2TargetPercent,
     challengeSettings.dailyLossLimitPercent,
@@ -2501,8 +2508,11 @@ export default function TradingJournalApp() {
     challengeMetrics.profitPercent,
     challengeMetrics.dailyLossPercent,
     challengeMetrics.totalLossPercent,
+    challengeState.referenceBalance,
     challengeState.phase1PassedAt,
     challengeState.phase2PassedAt,
+    isLoadingData,
+    metrics.currentBalance,
   ]);
 
   // Handlers
@@ -2510,14 +2520,16 @@ export default function TradingJournalApp() {
   const handleBackToDashboard = () => setSelectedDate(null);
   const handleAddEntry = async (e) => {
     e.preventDefault();
-    const missing = [];
-    if (!formState.pair || (typeof formState.pair === 'string' && !formState.pair.trim())) missing.push('Par');
-    if (!formState.rr || (typeof formState.rr === 'string' && !formState.rr.trim())) missing.push('R:R');
-    if (formState.pnl === '' || formState.pnl === undefined) missing.push('P/L ($)');
-    if (missing.length > 0) {
-      alert(`Para guardar la entrada son obligatorios: ${missing.join(', ')}. Por favor complétalos.`);
+    const err = {
+      pair: !formState.pair || (typeof formState.pair === 'string' && !formState.pair.trim()),
+      rr: !formState.rr || (typeof formState.rr === 'string' && !formState.rr.trim()),
+      pnl: formState.pnl === '' || formState.pnl === undefined,
+    };
+    if (err.pair || err.rr || err.pnl) {
+      setEntryFormErrors(err);
       return;
     }
+    setEntryFormErrors({ pair: false, rr: false, pnl: false });
     const newEntry = { 
       id: Date.now(), date: selectedDate.toISOString(), pair: formState.pair.toUpperCase(), type: formState.type, 
       rr: formState.rr || '1:1', pnl: parseFloat(formState.pnl), notes: formState.notes, screenshotUrl: formState.screenshotUrl
@@ -2569,6 +2581,7 @@ export default function TradingJournalApp() {
     // Safety check: only edit trading entries (not thoughts or dayoff)
     if (entry.entryType === 'thought' || entry.entryType === 'dayoff') return;
     setEditingEntry(entry);
+    setEntryFormErrors({ pair: false, rr: false, pnl: false });
     setFormState({
       pair: entry.pair,
       type: entry.type,
@@ -2584,14 +2597,16 @@ export default function TradingJournalApp() {
   const handleUpdateEntry = async (e) => {
     e.preventDefault();
     if (!editingEntry) return;
-    const missing = [];
-    if (!formState.pair || (typeof formState.pair === 'string' && !formState.pair.trim())) missing.push('Par');
-    if (!formState.rr || (typeof formState.rr === 'string' && !formState.rr.trim())) missing.push('R:R');
-    if (formState.pnl === '' || formState.pnl === undefined) missing.push('P/L ($)');
-    if (missing.length > 0) {
-      alert(`Para guardar la entrada son obligatorios: ${missing.join(', ')}. Por favor complétalos.`);
+    const err = {
+      pair: !formState.pair || (typeof formState.pair === 'string' && !formState.pair.trim()),
+      rr: !formState.rr || (typeof formState.rr === 'string' && !formState.rr.trim()),
+      pnl: formState.pnl === '' || formState.pnl === undefined,
+    };
+    if (err.pair || err.rr || err.pnl) {
+      setEntryFormErrors(err);
       return;
     }
+    setEntryFormErrors({ pair: false, rr: false, pnl: false });
     const updatedEntry = {
       ...editingEntry,
       pair: formState.pair.toUpperCase(),
@@ -4467,13 +4482,13 @@ export default function TradingJournalApp() {
       {isAddEntryModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className={`w-full max-w-md p-6 rounded-2xl shadow-2xl border ${theme.bgCard} ${theme.border} transform transition-all scale-100`}>
-            <div className="flex justify-between items-center mb-6"><h3 className={clsx("text-xl font-bold", theme.textMain, "flex items-center gap-2")}><Plus className={theme.accentText} size={24} /> Nueva Operativa</h3><button onClick={() => setIsAddEntryModalOpen(false)} className={`${theme.textMuted} hover:${theme.textMain} transition-colors`}><X size={20} /></button></div>
+            <div className="flex justify-between items-center mb-6"><h3 className={clsx("text-xl font-bold", theme.textMain, "flex items-center gap-2")}><Plus className={theme.accentText} size={24} /> Nueva Operativa</h3><button type="button" onClick={() => { setEntryFormErrors({ pair: false, rr: false, pnl: false }); setIsAddEntryModalOpen(false); }} className={`${theme.textMuted} hover:${theme.textMain} transition-colors`}><X size={20} /></button></div>
             <form onSubmit={handleAddEntry} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Select label="Par" value={formState.pair} onChange={(e) => setFormState({...formState, pair: e.target.value})} options={availablePairs} theme={theme} /><div className={`flex ${theme.bgInput} rounded-lg border ${theme.border} p-1`}><button type="button" onClick={() => setFormState({...formState, type: 'BUY'})} className={`flex-1 text-xs font-bold rounded transition-all ${formState.type === 'BUY' ? 'bg-blue-600 text-white shadow' : `${theme.textMuted} hover:${theme.textMain}`}`}>BUY</button><button type="button" onClick={() => setFormState({...formState, type: 'SELL'})} className={`flex-1 text-xs font-bold rounded transition-all ${formState.type === 'SELL' ? 'bg-orange-600 text-white shadow' : `${theme.textMuted} hover:${theme.textMain}`}`}>SELL</button></div></div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Select label="R:R" value={formState.rr} onChange={(e) => setFormState({...formState, rr: e.target.value})} options={RR_OPTIONS} theme={theme} /><Input type="number" value={formState.pnl} onChange={(e) => setFormState({...formState, pnl: e.target.value})} placeholder="P/L ($)" theme={theme} /></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Select label="Par" value={formState.pair} onChange={(e) => { setFormState({...formState, pair: e.target.value}); setEntryFormErrors((prev) => ({ ...prev, pair: false })); }} options={availablePairs} theme={theme} error={entryFormErrors.pair} /><div className={`flex ${theme.bgInput} rounded-lg border ${theme.border} p-1`}><button type="button" onClick={() => setFormState({...formState, type: 'BUY'})} className={`flex-1 text-xs font-bold rounded transition-all ${formState.type === 'BUY' ? 'bg-blue-600 text-white shadow' : `${theme.textMuted} hover:${theme.textMain}`}`}>BUY</button><button type="button" onClick={() => setFormState({...formState, type: 'SELL'})} className={`flex-1 text-xs font-bold rounded transition-all ${formState.type === 'SELL' ? 'bg-orange-600 text-white shadow' : `${theme.textMuted} hover:${theme.textMain}`}`}>SELL</button></div></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Select label="R:R" value={formState.rr} onChange={(e) => { setFormState({...formState, rr: e.target.value}); setEntryFormErrors((prev) => ({ ...prev, rr: false })); }} options={RR_OPTIONS} theme={theme} error={entryFormErrors.rr} /><Input type="number" value={formState.pnl} onChange={(e) => { setFormState({...formState, pnl: e.target.value}); setEntryFormErrors((prev) => ({ ...prev, pnl: false })); }} placeholder="P/L ($)" theme={theme} error={entryFormErrors.pnl} /></div>
               <div className="w-full"><Input label="Trading View URL:" value={formState.screenshotUrl} onChange={(e) => setFormState({...formState, screenshotUrl: e.target.value})} placeholder="https://www.tradingview.com/x/..." theme={theme} /></div>
               <div className="w-full"><textarea value={formState.notes} onChange={(e) => setFormState({...formState, notes: e.target.value})} placeholder="Comentarios / Pensamientos..." className={`${theme.bgInput} border ${theme.border} ${theme.textMain} px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:${theme.accentRing} transition-all placeholder-opacity-40 resize-none h-24 w-full text-sm`} /></div>
-              <div className="flex gap-3 pt-2"><Button onClick={() => setIsAddEntryModalOpen(false)} variant="ghost" theme={theme} className="flex-1">Cancelar</Button><Button type="submit" className="flex-1" theme={theme}>Agregar Entrada</Button></div>
+              <div className="flex gap-3 pt-2"><Button type="button" onClick={() => { setEntryFormErrors({ pair: false, rr: false, pnl: false }); setIsAddEntryModalOpen(false); }} variant="ghost" theme={theme} className="flex-1">Cancelar</Button><Button type="submit" className="flex-1" theme={theme}>Agregar Entrada</Button></div>
             </form>
           </div>
         </div>
@@ -4588,15 +4603,17 @@ export default function TradingJournalApp() {
       {isEditEntryModalOpen && editingEntry && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className={`w-full max-w-md p-6 rounded-2xl shadow-2xl border ${theme.bgCard} ${theme.border} transform transition-all scale-100`}>
-            <div className="flex justify-between items-center mb-6"><h3 className={clsx("text-xl font-bold", theme.textMain, "flex items-center gap-2")}><Edit2 className={theme.accentText} size={24} /> Editar Operativa</h3><button onClick={() => { setIsEditEntryModalOpen(false); setEditingEntry(null); setFormState({ pair: '', type: 'BUY', rr: '', pnl: '', notes: '', screenshotUrl: '' }); }} className={`${theme.textMuted} hover:${theme.textMain} transition-colors`}><X size={20} /></button></div>
+            <div className="flex justify-between items-center mb-6"><h3 className={clsx("text-xl font-bold", theme.textMain, "flex items-center gap-2")}><Edit2 className={theme.accentText} size={24} /> Editar Operativa</h3><button type="button" onClick={() => { setEntryFormErrors({ pair: false, rr: false, pnl: false }); setIsEditEntryModalOpen(false); setEditingEntry(null); setFormState({ pair: '', type: 'BUY', rr: '', pnl: '', notes: '', screenshotUrl: '' }); }} className={`${theme.textMuted} hover:${theme.textMain} transition-colors`}><X size={20} /></button></div>
             <form onSubmit={handleUpdateEntry} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Select label="Par" value={formState.pair} onChange={(e) => setFormState({...formState, pair: e.target.value})} options={availablePairs} theme={theme} /><div className={`flex ${theme.bgInput} rounded-lg border ${theme.border} p-1`}><button type="button" onClick={() => setFormState({...formState, type: 'BUY'})} className={`flex-1 text-xs font-bold rounded transition-all ${formState.type === 'BUY' ? 'bg-blue-600 text-white shadow' : `${theme.textMuted} hover:${theme.textMain}`}`}>BUY</button><button type="button" onClick={() => setFormState({...formState, type: 'SELL'})} className={`flex-1 text-xs font-bold rounded transition-all ${formState.type === 'SELL' ? 'bg-orange-600 text-white shadow' : `${theme.textMuted} hover:${theme.textMain}`}`}>SELL</button></div></div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Select label="R:R" value={formState.rr} onChange={(e) => setFormState({...formState, rr: e.target.value})} options={RR_OPTIONS} theme={theme} /><Input type="number" value={formState.pnl} onChange={(e) => setFormState({...formState, pnl: e.target.value})} placeholder="P/L ($)" theme={theme} /></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Select label="Par" value={formState.pair} onChange={(e) => { setFormState({...formState, pair: e.target.value}); setEntryFormErrors((prev) => ({ ...prev, pair: false })); }} options={availablePairs} theme={theme} error={entryFormErrors.pair} /><div className={`flex ${theme.bgInput} rounded-lg border ${theme.border} p-1`}><button type="button" onClick={() => setFormState({...formState, type: 'BUY'})} className={`flex-1 text-xs font-bold rounded transition-all ${formState.type === 'BUY' ? 'bg-blue-600 text-white shadow' : `${theme.textMuted} hover:${theme.textMain}`}`}>BUY</button><button type="button" onClick={() => setFormState({...formState, type: 'SELL'})} className={`flex-1 text-xs font-bold rounded transition-all ${formState.type === 'SELL' ? 'bg-orange-600 text-white shadow' : `${theme.textMuted} hover:${theme.textMain}`}`}>SELL</button></div></div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Select label="R:R" value={formState.rr} onChange={(e) => { setFormState({...formState, rr: e.target.value}); setEntryFormErrors((prev) => ({ ...prev, rr: false })); }} options={RR_OPTIONS} theme={theme} error={entryFormErrors.rr} /><Input type="number" value={formState.pnl} onChange={(e) => { setFormState({...formState, pnl: e.target.value}); setEntryFormErrors((prev) => ({ ...prev, pnl: false })); }} placeholder="P/L ($)" theme={theme} error={entryFormErrors.pnl} /></div>
               <div className="w-full"><Input label="Trading View URL:" value={formState.screenshotUrl} onChange={(e) => setFormState({...formState, screenshotUrl: e.target.value})} placeholder="https://www.tradingview.com/x/..." theme={theme} /></div>
               <div className="w-full"><textarea value={formState.notes} onChange={(e) => setFormState({...formState, notes: e.target.value})} placeholder="Comentarios / Pensamientos..." className={`${theme.bgInput} border ${theme.border} ${theme.textMain} px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:${theme.accentRing} transition-all placeholder-opacity-40 resize-none h-24 w-full text-sm`} /></div>
               <div className="flex gap-3 pt-2">
                 <Button 
+                  type="button"
                   onClick={() => { 
+                    setEntryFormErrors({ pair: false, rr: false, pnl: false });
                     setIsEditEntryModalOpen(false); 
                     setEditingEntry(null); 
                     setFormState({ pair: '', type: 'BUY', rr: '', pnl: '', notes: '', screenshotUrl: '' }); 
@@ -4949,7 +4966,7 @@ export default function TradingJournalApp() {
                 })()}
               </div>
               <div className={`shrink-0 p-2 sm:p-3 ${theme.bgCard} border-t ${theme.border} space-y-1.5`}>
-                <Button onClick={() => { setIsAddEntryModalOpen(true); setShowSidebar(false); }} className="w-full py-2 text-sm" theme={theme}><Plus size={16} /> Añadir Nueva Entrada</Button>
+                <Button onClick={() => { setEntryFormErrors({ pair: false, rr: false, pnl: false }); setIsAddEntryModalOpen(true); setShowSidebar(false); }} className="w-full py-2 text-sm" theme={theme}><Plus size={16} /> Añadir Nueva Entrada</Button>
                 <div className="grid grid-cols-2 gap-1.5">
                   <Button onClick={() => { setIsAddThoughtModalOpen(true); setShowSidebar(false); }} variant="ghost" size="sm" className="py-1.5 text-xs" theme={theme}><Brain size={14} /> Pensamiento</Button>
                   <Button onClick={handleToggleDayOff} variant="ghost" size="sm" className={`py-1.5 text-xs ${(() => {
