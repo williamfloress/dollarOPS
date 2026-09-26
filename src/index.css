@@ -3,17 +3,27 @@
 body {
   margin: 0;
   padding: 0;
-  overflow: hidden; /* Evita scrollbars dobles en la app de escritorio */
   width: 100%;
+  /* overflow is controlled per-page via .app-mode class */
 }
 
-/* Allow scrolling on mobile */
+/* App mode: prevent double scrollbars (the journal has its own scroll management) */
+body.app-mode {
+  overflow: hidden;
+}
+
+/* Landing page: allow natural scroll */
+body.landing-mode {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Mobile: always allow scrolling */
 @media (max-width: 640px) {
   body {
     overflow: auto;
   }
-  
-  /* Ensure full width on mobile */
+
   #root {
     width: 100%;
     max-width: 100%;

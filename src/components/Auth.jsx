@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import { signIn, signUp, signOut, getCurrentUser, isSupabaseConfigured, getSupabaseClient, requestPasswordReset, updatePassword, resendVerificationEmail } from '../utils/supabase.js';
 
 /**
@@ -742,6 +743,15 @@ export const Auth = ({ onAuthChange, theme }) => {
     <div className={`min-h-screen flex items-center justify-center p-4 ${themeColors.bgMain}`}>
       {/* Main card */}
       <div className={`${themeColors.bgCard} rounded-2xl shadow-2xl border ${themeColors.border} max-w-md w-full p-8`}>
+        {/* Back button */}
+        <a 
+          href="/" 
+          className={`inline-flex items-center gap-2 text-sm font-medium ${themeColors.textSec} hover:${themeColors.textMain} transition-colors mb-6`}
+        >
+          <ArrowLeft size={16} />
+          Regresar al inicio
+        </a>
+
         {showVerificationLogin && (
           <div className={`mb-6 p-4 ${themeColors.accentBg}/50 border ${themeColors.accentBorder} rounded-lg ${themeColors.accentText} text-sm`}>
             <p className="font-semibold mb-1">Email Verified!</p>
@@ -754,40 +764,10 @@ export const Auth = ({ onAuthChange, theme }) => {
           DollarOPS
         </h1>
         <p className={`text-sm ${themeColors.textSec} mb-8`}>
-          Sign in to your account or create a new one
+          Inicia sesión en tu cuenta
         </p>
 
-        {/* Tab Buttons */}
-        <div className={`flex gap-2 mb-8 ${themeColors.bgInput} p-1 rounded-lg`}>
-          <button
-            type="button"
-            onClick={() => {
-              setIsSignUp(false);
-              setError(null);
-            }}
-            className={`flex-1 py-2.5 px-4 rounded-lg font-medium text-sm transition-all ${
-              !isSignUp
-                ? `${themeColors.accentBg} text-white shadow-lg`
-                : `${themeColors.textSec} hover:${themeColors.textMain}`
-            }`}
-          >
-            Sign In
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setIsSignUp(true);
-              setError(null);
-            }}
-            className={`flex-1 py-2.5 px-4 rounded-lg font-medium text-sm transition-all ${
-              isSignUp
-                ? `${themeColors.accentBg} text-white shadow-lg`
-                : `${themeColors.textSec} hover:${themeColors.textMain}`
-            }`}
-          >
-            Sign Up
-          </button>
-        </div>
+
 
         {error && (
           <div className="mb-6 p-3 bg-red-900/50 text-red-200 rounded-lg text-sm border border-red-800">

@@ -1,6 +1,9 @@
 /**
  * Centralized storage utility with Supabase integration
- * Requires Supabase to be configured and user to be authenticated
+ * Requires Supabase to be configured and user to be authenticated.
+ *
+ * Demo Mode: when window.__DEMO_MODE__ === true, all operations use
+ * localStorage via storageLocal.js instead of Supabase.
  */
 
 import { 
@@ -9,6 +12,15 @@ import {
   loadJournalDataFromSupabase, 
   saveJournalDataToSupabase 
 } from './supabase.js';
+
+import {
+  saveJournalDataToLocal,
+  loadJournalDataFromLocal,
+  clearJournalDataFromLocal,
+} from './storageLocal.js';
+
+/** Returns true when the app is running in Demo (LocalStorage) mode. */
+const isDemoMode = () => typeof window !== 'undefined' && window.__DEMO_MODE__ === true;
 
 // Storage keys (keep existing)
 const STORAGE_KEYS = {
@@ -72,11 +84,17 @@ export const setStoredChallengeSettings = (settings) => {
 };
 
 /**
- * Save all journal data to Supabase
+ * Save all journal data (Supabase or LocalStorage depending on mode)
  * @param {Object} data - Journal data object
  * @returns {Promise<{success: boolean, error: Error|null}>} Success status
  */
 export const saveJournalData = async (data) => {
+  // --- Demo Mode: use localStorage ---
+  if (isDemoMode()) {
+    return saveJournalDataToLocal(data);
+  }
+
+  // --- Production Mode: use Supabase ---
   try {
     const { userId, error: modeError } = await getStorageMode();
 
@@ -93,10 +111,19 @@ export const saveJournalData = async (data) => {
 };
 
 /**
- * Load all journal data from Supabase
+ * Load all journal data (Supabase or LocalStorage depending on mode)
  * @returns {Promise<{data: Object|null, error: Error|null}>} Journal data object or error
  */
 export const loadJournalData = async () => {
+  // --- Demo Mode: use localStorage ---
+  if (isDemoMode()) {
+    const result = loadJournalDataFromLocal();
+    // In demo mode always return initialized=true after first setup
+    // (the welcome modal will set it to true on first run)
+    return result;
+  }
+
+  // --- Production Mode: use Supabase ---
   try {
     const { userId, error: modeError } = await getStorageMode();
 
@@ -154,10 +181,16 @@ export const loadJournalData = async () => {
 };
 
 /**
- * Clear all journal data from Supabase
+ * Clear all journal data (Supabase or LocalStorage depending on mode)
  * @returns {Promise<{success: boolean, error: Error|null}>}
  */
 export const clearJournalData = async () => {
+  // --- Demo Mode: clear localStorage ---
+  if (isDemoMode()) {
+    return clearJournalDataFromLocal();
+  }
+
+  // --- Production Mode: clear Supabase ---
   try {
     const { userId, error: modeError } = await getStorageMode();
 

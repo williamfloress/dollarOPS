@@ -2078,11 +2078,14 @@ export default function TradingJournalApp() {
   const [user, setUser] = useState(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  // For Supabase users, start with loading true to prevent welcome modal flash
-  const [isLoadingData, setIsLoadingData] = useState(() => isSupabaseConfigured());
+  // Helper: check if running in Demo Mode (LocalStorage only)
+  const isDemoMode = () => typeof window !== 'undefined' && window.__DEMO_MODE__ === true;
+  // For Supabase users and demo mode, start with loading true to prevent welcome modal flash
+  const [isLoadingData, setIsLoadingData] = useState(() => isSupabaseConfigured() || (typeof window !== 'undefined' && window.__DEMO_MODE__ === true));
   // Loading state with progress and dynamic messages
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingMessage, setLoadingMessage] = useState('Iniciando carga...');
+
 
   // Auth change handler - memoized to prevent infinite loop in Auth component
   const handleAuthChange = useCallback((newUser) => {
@@ -2166,7 +2169,8 @@ export default function TradingJournalApp() {
       // Persist challenge settings to localStorage immediately so enable/disable survives refresh (even without Supabase)
       setStoredChallengeSettings(nextChallengeSettings);
 
-      if (!isSupabaseConfigured() || !user) {
+      // In demo mode, skip Supabase auth check — saveJournalData routes to localStorage
+      if (!isDemoMode() && (!isSupabaseConfigured() || !user)) {
         console.warn('Cannot save: User must be authenticated');
         return;
       }
@@ -2196,6 +2200,11 @@ export default function TradingJournalApp() {
   // Check authentication status on mount
   useEffect(() => {
     const checkAuth = async () => {
+      // Demo Mode: skip Supabase auth entirely
+      if (isDemoMode()) {
+        setIsCheckingAuth(false);
+        return;
+      }
       if (!isSupabaseConfigured()) {
         setIsCheckingAuth(false);
         return;
@@ -2910,9 +2919,8 @@ export default function TradingJournalApp() {
     setIsFirstTime(false);
     
     // Save initialized state immediately
-    // For Supabase users, this will be saved to Supabase
-    // Save to Supabase with initialized: true
-    if (isSupabaseConfigured() && user) {
+    // For Supabase users and demo mode, this will be saved to storage
+    if ((isSupabaseConfigured() && user) || isDemoMode()) {
       const dataToSave = {
         entries: [],
         availablePairs: preferences.pairs || [],
@@ -2942,6 +2950,11 @@ export default function TradingJournalApp() {
         setAppTitle('ProTrader Journal');
         setAccountBalance(0);
         setCurrentTheme('slate_blue');
+      } else if (isDemoMode()) {
+        // Demo Mode: just show a brief loading screen
+        setIsLoadingData(true);
+        setLoadingProgress(0);
+        setLoadingMessage('Cargando datos locales...');
       }
       
       try {
@@ -3010,7 +3023,7 @@ export default function TradingJournalApp() {
           setChallengeState({ ...defaultChallengeState, ...(data.challengeState || {}) });
           prevChallengeEnabledRef.current = !!(mergedChallenge.enabled);
           
-          // Use initialized field from Supabase
+          // Use initialized field from Supabase or LocalStorage (demo mode)
           if (isSupabaseConfigured() && user) {
             setIsFirstTime(data.initialized !== true);
             console.log('Supabase user - isFirstTime:', data.initialized !== true, 'initialized:', data.initialized);
@@ -3022,6 +3035,10 @@ export default function TradingJournalApp() {
                 migrateImagesToStorage(data.motivationalImages);
               }, 1000);
             }
+          } else if (isDemoMode()) {
+            // Demo Mode: use initialized flag from localStorage
+            setIsFirstTime(data.initialized !== true);
+            console.log('[Demo] isFirstTime:', data.initialized !== true, 'initialized:', data.initialized);
           } else {
             // If Supabase is not configured, show first-time setup
             setIsFirstTime(true);
@@ -3045,11 +3062,14 @@ export default function TradingJournalApp() {
       }
     };
 
-    // Only load if user is authenticated
+    // Only load if user is authenticated OR we are in demo mode
     if (isSupabaseConfigured() && user) {
       loadData();
+    } else if (isDemoMode()) {
+      // Demo Mode: load from localStorage
+      loadData();
     } else if (!isSupabaseConfigured()) {
-      // If Supabase is not configured, show first-time setup but restore challenge mode from localStorage
+      // If Supabase is not configured (and not demo), show first-time setup but restore challenge mode from localStorage
       setIsLoadingData(false);
       setIsFirstTime(true);
       const stored = getStoredChallengeSettings();
@@ -3061,6 +3081,7 @@ export default function TradingJournalApp() {
       setIsLoadingData(false);
     }
   }, [user]); // Reload when user changes
+
 
   // --- Auto-save when data changes (debounced) ---
   useEffect(() => {
@@ -3074,8 +3095,8 @@ export default function TradingJournalApp() {
         appTitle,
         accountBalance,
         currentTheme,
-        // For Supabase users, initialized should be true if not first time
-        initialized: isSupabaseConfigured() && user ? true : false,
+        // For Supabase users and demo mode, initialized should be true if not first time
+        initialized: (isSupabaseConfigured() && user) || isDemoMode() ? true : false,
         challengeSettings,
         challengeState,
       };
@@ -3116,12 +3137,14 @@ export default function TradingJournalApp() {
 
   // Importar CSV
   const handleImportData = () => {
+    if (isDemoMode()) { alert('La importación de datos no está disponible en la versión Demo.\nSolicita acceso Premium para esta función.'); return; }
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.csv';
     input.onchange = (e) => {
       const file = e.target.files[0];
       if (!file) return;
+
       
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -3257,6 +3280,7 @@ export default function TradingJournalApp() {
 
   // Exportar CSV
   const handleExportData = () => {
+    if (isDemoMode()) { alert('La exportación de datos no está disponible en la versión Demo.\nSolicita acceso Premium para esta función.'); return; }
     // Filter out thoughts and dayoff - only export trading entries
     const tradingEntries = entries.filter(e => !e.entryType || (e.entryType !== 'thought' && e.entryType !== 'dayoff'));
     if (tradingEntries.length === 0) { alert("No hay datos para exportar"); return; }
@@ -3278,6 +3302,7 @@ export default function TradingJournalApp() {
 
   // Exportar JSON (all journal data)
   const handleExportJSON = async () => {
+    if (isDemoMode()) { alert('La exportación de datos no está disponible en la versión Demo.\nSolicita acceso Premium para esta función.'); return; }
     const success = await downloadJournalData();
     if (success) {
       alert('Datos exportados exitosamente en formato JSON');
@@ -3288,6 +3313,7 @@ export default function TradingJournalApp() {
 
   // Importar JSON
   const handleImportJSON = () => {
+    if (isDemoMode()) { alert('La importación de datos no está disponible en la versión Demo.\nSolicita acceso Premium para esta función.'); return; }
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json';
@@ -3511,7 +3537,8 @@ export default function TradingJournalApp() {
   // Authentication check - show Auth component if:
   // 1. Supabase is configured AND user is not logged in, OR
   // 2. Recovery mode is active (even if user exists from recovery session)
-  if (isSupabaseConfigured() && (!user || isRecoveryMode)) {
+  // BUT: In Demo Mode, skip authentication entirely — no login required
+  if (isSupabaseConfigured() && !isDemoMode() && (!user || isRecoveryMode)) {
     return (
       <div className={`min-h-screen flex items-center justify-center ${THEMES[currentTheme].colors.bgMain} p-4`}>
         <Auth onAuthChange={handleAuthChange} theme={THEMES[currentTheme]} />
@@ -3885,7 +3912,8 @@ export default function TradingJournalApp() {
                 </div>
               )}
             </div>
-            {/* Section: Importar / Exportar */}
+            {/* Section: Importar / Exportar — hidden in Demo Mode */}
+            {!isDemoMode() && (
             <div className={clsx('rounded-lg border', theme.border, theme.bgCard50)}>
               <button type="button" onClick={() => toggleSettingsSection('importExport')} className={clsx('w-full flex items-center justify-between gap-2 px-4 py-3 text-left', theme.textMain, theme.bgHover, 'rounded-t-lg')}>
                 <span className={clsx('text-xs uppercase tracking-wider font-semibold flex items-center gap-2', theme.textSec)}><Download size={14} /> Importar / Exportar</span>
@@ -3910,6 +3938,8 @@ export default function TradingJournalApp() {
                 </div>
               )}
             </div>
+            )}
+
             {isSupabaseConfigured() && user && (
             <div className={clsx('rounded-lg border', theme.border, theme.bgCard50)}>
               <button type="button" onClick={() => toggleSettingsSection('account')} className={clsx('w-full flex items-center justify-between gap-2 px-4 py-3 text-left', theme.textMain, theme.bgHover, 'rounded-t-lg')}>
@@ -3945,7 +3975,8 @@ export default function TradingJournalApp() {
               )}
               </div>
             )}
-            {/* Section: Zona de Peligro */}
+            {/* Section: Zona de Peligro — hidden in Demo Mode */}
+            {!isDemoMode() && (
             <div className={clsx('rounded-lg border border-rose-500/50', theme.bgCard50)}>
               <button type="button" onClick={() => toggleSettingsSection('danger')} className={clsx('w-full flex items-center justify-between gap-2 px-4 py-3 text-left', theme.textMain, theme.bgHover, 'rounded-t-lg')}>
                 <span className="text-xs uppercase tracking-wider font-semibold flex items-center gap-2 text-rose-400"><AlertTriangle size={14} /> Zona de Peligro</span>
@@ -3960,6 +3991,8 @@ export default function TradingJournalApp() {
                 </div>
               )}
             </div>
+            )}
+
             <Button 
               variant="primary" 
               onClick={async () => {
