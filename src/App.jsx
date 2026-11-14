@@ -4529,8 +4529,8 @@ export default function TradingJournalApp() {
 
       {/* View Entry Modal */}
       {isViewEntryModalOpen && viewingEntry && !viewingEntry.entryType && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className={`w-full max-w-md p-6 rounded-2xl shadow-2xl border ${theme.bgCard} ${theme.border} transform transition-all scale-100`}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 p-4">
+          <div className={`w-full max-w-md max-h-[90vh] overflow-y-auto p-6 rounded-2xl shadow-2xl border ${theme.bgCard} ${theme.border} transform transition-all scale-100`}>
             <div className="flex justify-between items-center mb-6">
               <h3 className={clsx("text-xl font-bold", theme.textMain, "flex items-center gap-2")}>
                 <Activity className={theme.accentText} size={24} /> Detalles de la Operativa
@@ -4634,8 +4634,8 @@ export default function TradingJournalApp() {
 
       {/* Edit Entry Modal */}
       {isEditEntryModalOpen && editingEntry && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className={`w-full max-w-md p-6 rounded-2xl shadow-2xl border ${theme.bgCard} ${theme.border} transform transition-all scale-100`}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 p-4">
+          <div className={`w-full max-w-md max-h-[90vh] overflow-y-auto p-6 rounded-2xl shadow-2xl border ${theme.bgCard} ${theme.border} transform transition-all scale-100`}>
             <div className="flex justify-between items-center mb-6"><h3 className={clsx("text-xl font-bold", theme.textMain, "flex items-center gap-2")}><Edit2 className={theme.accentText} size={24} /> Editar Operativa</h3><button type="button" onClick={() => { setEntryFormErrors({ pair: false, rr: false, pnl: false }); setIsEditEntryModalOpen(false); setEditingEntry(null); setFormState({ pair: '', type: 'BUY', rr: '', pnl: '', notes: '', screenshotUrl: '' }); }} className={`${theme.textMuted} hover:${theme.textMain} transition-colors`}><X size={20} /></button></div>
             <form onSubmit={handleUpdateEntry} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Select label="Par" value={formState.pair} onChange={(e) => { setFormState({...formState, pair: e.target.value}); setEntryFormErrors((prev) => ({ ...prev, pair: false })); }} options={availablePairs} theme={theme} error={entryFormErrors.pair} /><div className={`flex ${theme.bgInput} rounded-lg border ${theme.border} p-1`}><button type="button" onClick={() => setFormState({...formState, type: 'BUY'})} className={`flex-1 text-xs font-bold rounded transition-all ${formState.type === 'BUY' ? 'bg-blue-600 text-white shadow' : `${theme.textMuted} hover:${theme.textMain}`}`}>BUY</button><button type="button" onClick={() => setFormState({...formState, type: 'SELL'})} className={`flex-1 text-xs font-bold rounded transition-all ${formState.type === 'SELL' ? 'bg-orange-600 text-white shadow' : `${theme.textMuted} hover:${theme.textMain}`}`}>SELL</button></div></div>
@@ -4957,7 +4957,7 @@ export default function TradingJournalApp() {
                                   <div className="flex items-center gap-2 mb-1 flex-wrap"><span className={`text-[10px] font-bold px-2 py-1 rounded uppercase shrink-0 ${entry.type === 'BUY' ? 'bg-blue-500/20 text-blue-400' : 'bg-orange-500/20 text-orange-400'}`}>{entry.type}</span><span className={`font-bold ${theme.textMain} text-base sm:text-lg truncate`}>{entry.pair}</span>{entry.screenshotUrl && (<a href={entry.screenshotUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className={`ml-1 p-1 rounded hover:${theme.bgSec} ${theme.textMuted} hover:${theme.accentText} transition-colors shrink-0`} title="Ver Captura"><ExternalLink size={12} /></a>)}</div>
                                   <div className={`text-xs ${theme.textMuted} font-medium flex items-center gap-2`}><Target size={12} /> R:R {entry.rr}</div>
                                 </div>
-                                <div className="text-right shrink-0"><div className={`font-mono text-base sm:text-lg font-bold ${entry.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{entry.pnl >= 0 ? '+' : ''}{parseFloat(entry.pnl).toFixed(2)}$</div><button onClick={(e) => { e.stopPropagation(); handleDeleteEntry(entry.id); }} className={`${theme.textSec} hover:text-rose-500 transition-colors mt-1 sm:mt-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100`}><Trash2 size={14} /></button></div>
+                                <div className="text-right shrink-0"><div className={`font-mono text-base sm:text-lg font-bold ${entry.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{entry.pnl >= 0 ? '+' : ''}{parseFloat(entry.pnl).toFixed(2)}$</div><div className="flex gap-2 justify-end mt-1 sm:mt-2"><button onClick={(e) => { e.stopPropagation(); handleEditEntry(entry); setShowSidebar(false); }} title="Editar" className={`${theme.textSec} hover:${theme.accentText} transition-colors opacity-100 sm:opacity-0 sm:group-hover:opacity-100`}><Edit2 size={14} /></button><button onClick={(e) => { e.stopPropagation(); handleDeleteEntry(entry.id); }} title="Eliminar" className={`${theme.textSec} hover:text-rose-500 transition-colors opacity-100 sm:opacity-0 sm:group-hover:opacity-100`}><Trash2 size={14} /></button></div></div>
                               </div>
                               {entry.notes && (<div className={`text-xs ${theme.textMuted} italic border-t ${theme.borderSec} pt-1.5 mt-1 flex gap-1.5 items-start`}><MessageSquare size={11} className="mt-0.5 opacity-50 shrink-0" /><span className="line-clamp-2 sm:hover:line-clamp-none transition-all">{entry.notes}</span></div>)}
                             </div>
